@@ -13,7 +13,9 @@
 \usepackage{subcaption}
 \usepackage{xcolor}
 \usepackage{listings}
-
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage{float}
 % Page layout
 \usepackage[margin=1in]{geometry}
 
@@ -41,7 +43,7 @@
 
 \author{
     De Meyer Luca\\
-    \textit{Howest - Digital Arts and Entertainment}\\
+    \textit{Howest-Digital Arts and Entertainment}\\
     \texttt{luca.de.meyer@student.howest.be}
 }
 
@@ -98,9 +100,88 @@ Our work makes the following contributions:
 \section{Background and Related Work}
 \label{sec:background}
 
+\subsection{Rasterization Fundamentals}
+Rasterization is the dominant rendering technique in real-time computer graphics, used in almost all 3D interactive applications.
+Fundamental principle involes converting 3D geometry into a 2D grid pixels. By using the GPU, which is highly optimized to rasterize
+millions of triangle, rasterization is fast and efficient which is why its the backbone of real-time rendering.
+In simple terms, it takes mathematically described shapes and turns the into colored pixels we can see.
+\subsubsection{The Graphics Rendering Pipeline}
+The graphics rendering pipeline or "the pipeline" is the core component of any rendering technique. Its main function is to "render" a 2D image given a virtual camera, 3D objects, light sources and more. (real time rendering 4th edition)
+A pipeline consists of several stages which all perform parts of a larger task. In the next section we will brielfy go over each stage.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=1.2cm, align=center},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[box] (n1) {Appliction};
+    \node[box, right=of n1] (n2) {Geometry\\Processing};
+    \node[box, right=of n2] (n3) {Rasterization};
+    \node[box, right=of n3] (n4) {Pixel\\Processing};
+    \draw[arrow] (n1) -- (n2);
+    \draw[arrow] (n2) -- (n3);
+    \draw[arrow] (n3) -- (n4);
+\end{tikzpicture}
+\caption{Graphics Rendering Pipeline}
+\label{fig:Graphics-Rendering-Pipeline}
+\end{figure}
+
+\subsubsection{The Application Stage}
+The application stage tkeas place on the CPU meaning we as the developers have full control meaning we can modify and optimize as much as our hearts content, however some application work can be on the GPU in the form of 
+compute shaders. These treat the GPU as a highly parallel general processor ignoring its specialization meant for graphics.
+At the end of the application stage the geometry to be rendered is sent to the geometry processing stage.
+\subsubsection{Geometry Processing stage}
+The geometry stage handles most per-triangle and per-vertex operations, it is further devided into vertex shading, projection, clipping and screen mapping stages.
+% do we need to go over each of the sub stages?
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=1.2cm, align=center},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[box] (n1) {Vertex\\Shading};
+    \node[box, right=of n1] (n2) {Projection};
+    \node[box, right=of n2] (n3) {Clipping};
+    \node[box, right=of n3] (n4) {screen\\mapping};
+    \draw[arrow] (n1) -- (n2);
+    \draw[arrow] (n2) -- (n3);
+    \draw[arrow] (n3) -- (n4);
+\end{tikzpicture}
+\caption{Geometry processing}
+\label{fig:geometry-processing}
+\end{figure}
+\subsubsection{Vertex Shading}
+To keep things short and simple, vertex shading has 2 tasks. Compute vertex positions and evaluate what we as programmer want out vertex output data to contain for example normals, UV-coordinates.
+Traditionally the shade of an object was computed by applying lights to vertex locations and normal and only storing the resulting color, this is why this stage is called vertex shading however,
+with the modren GPU and a large part of shading taking place per pixel, the vertex stage is more general and may not even evaluate any shading.
+
+\subsubsection{Rasterization}
+Rasterization also known as scan conversion, is the process of converting our 2D-vertices in screen space with a z-value and shading information into pixels on the screen.
+we find all pixels inside the primitives and go over our next 2 stages. primitive assembly also known as triangle setup
+and trianlge traversal, given the names not only triangles can be procesed, these stages can also handle lines and points but since a trianlge is the most common form they have triangle in their name.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=1.2cm, align=center},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[box] (n1) {Triangle\\Setup};
+    \node[box, right=of n1] (n2) {Triangle\\Traversal};
+    \node[box, right=of n2] (n3) {Pixel\\shading};
+    \node[box, right=of n3] (n4) {Merging};
+    \draw[arrow] (n1) -- (n2);
+    \draw[arrow] (n2) -- (n3);
+    \draw[arrow] (n3) -- (n4);
+\end{tikzpicture}
+\caption{Rasterization stage}
+\label{fig:rasterization-stage}
+\end{figure}
+
 \subsection{Ray Tracing Fundamentals}
 \label{subsec:rt-fundamentals}
-
 Ray tracing simulates light transport by casting rays from the camera through each pixel and testing for intersections with scene geometry. Modern hardware acceleration
 structures (Bounding Volume Hierarchies) enable real-time traversal, though full path tracing remains expensive. Hybrid rendering selectively applies ray tracing to
 effects where rasterization produces visible artifacts: hard shadows from small light sources, accurate reflections on curved surfaces, and inter-object occlusion.
@@ -134,7 +215,9 @@ Prior work has evaluated these strategies in isolation, but comprehensive qualit
 \subsection{Perceptual Quality Metrics}
 \label{subsec:quality-metrics}
 
-Traditional image quality metrics like PSNR and SSIM capture structural differences but correlate weakly with human perception for rendered images. LPIPS (Learned Perceptual Image Patch Similarity) uses deep neural networks trained on human perceptual judgments, providing better correlation with subjective quality assessment. We employ all three metrics for comprehensive evaluation, with LPIPS as the primary perceptual measure.
+Traditional image quality metrics like PSNR and SSIM capture structural differences but correlate weakly with human perception for rendered images.
+LPIPS (Learned Perceptual Image Patch Similarity) uses deep neural networks trained on human perceptual judgments, providing better correlation with subjective quality assessment.
+We employ all three metrics for comprehensive evaluation, with LPIPS as the primary perceptual measure.
 
 \section{Research Questions and Hypotheses}
 \label{sec:hypotheses}
@@ -152,7 +235,8 @@ Based on preliminary profiling and prior literature, we formulate the following 
 
 \subsection{Performance Costs (H1)}
 
-\textbf{H1a:} Ray-traced shadows cost less than reflections, with global illumination being most expensive. We expect shadows to add approximately 2ms, reflections 4-6ms, and combined features 7-9ms at 1080p on RTX 3060.
+\textbf{H1a:} Ray-traced shadows cost less than reflections, with global illumination being most expensive. We expect shadows to add approximately 2ms, reflections 4-6ms,
+ and combined features 7-9ms at 1080p on RTX 3060.
 
 \textbf{H1b:} Rendering costs scale super-linearly with resolution due to increased ray coherence loss. We predict 1080p to 1440p incurs 1.8× cost, and 1440p to 4K incurs 2.2× cost.
 
@@ -191,16 +275,19 @@ We predict the following ranking by quality-per-millisecond:
 \subsection{Experimental Design}
 \label{subsec:experimental-design}
 
-Our experiment measures incremental performance costs and visual quality improvements when transitioning from pure rasterization to hybrid ray tracing. We employ a controlled experimental design with systematic variation of rendering features, sampling strategies, and scene characteristics.
+Our experiment measures incremental performance costs and visual quality improvements when transitioning from pure rasterization to hybrid ray tracing. We employ a controlled experimental design with
+systematic variation of rendering features, sampling strategies, and scene characteristics.
 
 \subsection{Test Scenes}
 \label{subsec:test-scenes}
 
 Three representative scenes are selected to cover different performance and quality scenarios:
 
-\textbf{Indoor Scene:} Medium geometric complexity (1-2M triangles) featuring several glossy materials and 2-3 dynamic light sources. This scene tests reflection accuracy on varied surface roughness and multi-light shadow performance.
+\textbf{Indoor Scene:} Medium geometric complexity (1-2M triangles) featuring several glossy materials and 2-3 dynamic light sources. This scene tests reflection accuracy on varied surface roughness
+ and multi-light shadow performance.
 
-\textbf{Outdoor Scene:} High geometric complexity (10M triangles) with vegetation, small occluders, and one dominant directional light. This scene stresses BVH traversal and tests shadow quality with complex occluder geometry.
+\textbf{Outdoor Scene:} High geometric complexity (10M triangles) with vegetation, small occluders, and one dominant directional light. This scene stresses BVH traversal and tests shadow quality with
+ complex occluder geometry.
 
 \textbf{Specular Scene:} Low triangle count but multiple mirror and water-like surfaces. This scene isolates reflection quality and tests handling of highly reflective materials where screen-space techniques fail.
 
@@ -242,7 +329,8 @@ Experiments are conducted on three representative hardware configurations:
     \item \textbf{Desktop:} AMD Radeon RX 9070 XT (16GB), Ryzen 7950X, 32GB RAM
 \end{itemize}
 
-Software environment: Windows 11, Vulkan SDK 1.3.x, DXR via DirectX 12. All drivers updated to latest stable versions. Power settings configured for maximum performance with adequate cooling to prevent thermal throttling.
+Software environment: Windows 11, Vulkan SDK 1.3.x, DXR via DirectX 12. All drivers updated to latest stable versions. Power settings configured for maximum performance with adequate cooling
+ to prevent thermal throttling.
 
 \subsection{Instrumentation and Data Collection}
 \label{subsec:instrumentation}
@@ -257,7 +345,8 @@ GPU timings are collected using timestamp queries inserted at key pipeline stage
     \item Post-processing and final composite
 \end{enumerate}
 
-Each configuration executes for 120 consecutive frames following a 60-frame warm-up period to ensure thermal and workload stability. The middle 60 frames are analyzed to exclude transients. Each test repeats three times to measure variance and compute confidence intervals.
+Each configuration executes for 120 consecutive frames following a 60-frame warm-up period to ensure thermal and workload stability. The middle 60 frames are analyzed to exclude transients.
+ Each test repeats three times to measure variance and compute confidence intervals.
 
 Metrics recorded per frame include:
 \begin{itemize}
@@ -282,7 +371,8 @@ Perceptual quality is evaluated against path-traced ground truth using three com
 
 Temporal stability is measured by computing frame-to-frame LPIPS differences along the camera path, detecting flickering and ghosting artifacts.
 
-Additionally, A/B visual comparison tests are conducted where observers rate perceived quality differences between configurations on a 5-point scale, validating that metric-based conclusions align with subjective perception.
+Additionally, A/B visual comparison tests are conducted where observers rate perceived quality differences between configurations on a 5-point scale, validating that metric-based conclusions
+ align with subjective perception.
 
 \subsection{Quality-Per-Millisecond Metric}
 \label{subsec:qpm-metric}
@@ -317,22 +407,28 @@ The following visualizations are generated:
 
 Vulkan and DXR implementations are compared directly using identical scene data, shaders (translated via SPIR-V Cross), and timing methodology to isolate API-level performance differences.
 
-Statistical significance of performance differences is assessed using paired t-tests with Bonferroni correction for multiple comparisons. Effect sizes are reported using Cohen's d to distinguish practically significant differences from merely statistically significant ones.
+Statistical significance of performance differences is assessed using paired t-tests with Bonferroni correction for multiple comparisons. Effect sizes are reported using Cohen's d to distinguish
+ practically significant differences from merely statistically significant ones.
 
 \section{Expected Results}
 \label{sec:expected-results}
 
 Based on preliminary profiling and hypothesis formulation, we anticipate the following outcomes:
 
-\textbf{Performance Costs:} Ray-traced shadows will add approximately 2ms per light at 1080p, while reflections will cost 4-6ms depending on material roughness distribution. Combined, we expect 7-9ms overhead, slightly less than the sum due to shared BVH traversal setup costs.
+\textbf{Performance Costs:} Ray-traced shadows will add approximately 2ms per light at 1080p, while reflections will cost 4-6ms depending on material roughness distribution. Combined, we expect 7-9ms overhead,
+ slightly less than the sum due to shared BVH traversal setup costs.
 
-\textbf{Resolution Scaling:} The transition from 1080p to 1440p is expected to increase ray tracing costs by approximately 1.8× due to the 1.77× increase in pixel count plus reduced ray coherence. The 1440p to 4K transition will incur a steeper 2.2× cost increase.
+\textbf{Resolution Scaling:} The transition from 1080p to 1440p is expected to increase ray tracing costs by approximately 1.8× due to the 1.77× increase in pixel count plus reduced ray coherence. The 1440p to
+ 4K transition will incur a steeper 2.2× cost increase.
 
-\textbf{Quality Optimization:} We expect 1 SPP with temporal denoising to achieve LPIPS scores within 10\% of 4 SPP raw while costing 75\% less, validating the effectiveness of temporal accumulation. Adaptive sampling should reduce costs by 40-60\% with minimal (< 5\%) quality degradation.
+\textbf{Quality Optimization:} We expect 1 SPP with temporal denoising to achieve LPIPS scores within 10\% of 4 SPP raw while costing 75\% less, validating the effectiveness of temporal accumulation.
+ Adaptive sampling should reduce costs by 40-60\% with minimal (< 5\%) quality degradation.
 
-\textbf{API Parity:} Vulkan and DXR are expected to perform within ±5-10\% on identical workloads, with Vulkan potentially showing slight advantages in CPU-limited scenarios due to lower driver overhead and explicit synchronization control.
+\textbf{API Parity:} Vulkan and DXR are expected to perform within ±5-10\% on identical workloads, with Vulkan potentially showing slight advantages in CPU-limited scenarios due to lower driver overhead
+ and explicit synchronization control.
 
-\textbf{Hybrid Strategy Ranking:} G-buffer-guided tracing with 1 SPP and temporal denoising is predicted to achieve the highest QPM score, offering approximately 50\% cost reduction compared to full-screen tracing with less than 10\% quality loss.
+\textbf{Hybrid Strategy Ranking:} G-buffer-guided tracing with 1 SPP and temporal denoising is predicted to achieve the highest QPM score, offering approximately 50\% cost reduction compared to full-screen
+ tracing with less than 10\% quality loss.
 
 % Placeholder for results figures
 % \begin{figure}[t]
@@ -351,9 +447,11 @@ Based on preliminary profiling and hypothesis formulation, we anticipate the fol
 \section{Limitations}
 \label{sec:limitations}
 
-Our study focuses on shadows and reflections, excluding global illumination and ambient occlusion which have different performance characteristics. The three test scenes, while representative, cannot capture all possible scene types and characteristics. Hardware testing is limited to NVIDIA RTX and AMD RDNA architectures; results may not generalize to future GPU generations or alternative vendors.
+Our study focuses on shadows and reflections, excluding global illumination and ambient occlusion which have different performance characteristics. The three test scenes, while representative,
+ cannot capture all possible scene types and characteristics. Hardware testing is limited to NVIDIA RTX and AMD RDNA architectures; results may not generalize to future GPU generations or alternative vendors.
 
-The perceptual quality metrics, while validated in prior work, represent a specific model of human perception. Individual subjective preferences may vary, particularly for temporal artifacts where LPIPS may not fully capture discomfort from flickering or ghosting.
+The perceptual quality metrics, while validated in prior work, represent a specific model of human perception. Individual subjective preferences may vary, particularly for temporal artifacts where LPIPS may
+not fully capture discomfort from flickering or ghosting.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -364,7 +462,8 @@ The perceptual quality metrics, while validated in prior work, represent a speci
 \section{Future Work}
 \label{sec:future-work}
 
-Future research directions include extending this analysis to global illumination and ambient occlusion, evaluating next-generation denoising techniques (including ML-based approaches), and investigating dynamic quality scaling systems that adjust ray tracing configurations based on GPU load and frame time targets.
+Future research directions include extending this analysis to global illumination and ambient occlusion, evaluating next-generation denoising techniques (including ML-based approaches),
+ and investigating dynamic quality scaling systems that adjust ray tracing configurations based on GPU load and frame time targets.
 
 \bibliographystyle{plain}
 \bibliography{references}
