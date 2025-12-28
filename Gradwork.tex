@@ -1,4 +1,3 @@
-% Generated on 2023/10/16 15:02:38
 \documentclass[12pt,a4paper]{report}
 \usepackage[utf8]{inputenc}
 \usepackage[explicit]{titlesec}
@@ -21,13 +20,14 @@
 \usepackage{adjustbox}
 \usepackage{subfig}
 \usepackage{lipsum}
+\usepackage{float} % Added for figure positioning
 
 \usepackage{framed}
 \usepackage{lastpage}
 
-
 \usepackage{fancyhdr}
-\usetikzlibrary{calc,arrows.meta,backgrounds}
+% Combined TikZ libraries from template and draft
+\usetikzlibrary{calc,arrows.meta,backgrounds,shapes.geometric,positioning}
 
 \newcommand{\msymbol}[1]{\ifmmode #1 \else $#1$\fi}
 
@@ -89,8 +89,6 @@
   bottom=1pt
 }
 
-
-
 \pagecolor{backgroundFill}
 \color{backgroundText}
 \everymath{\color{backgroundText}}
@@ -121,8 +119,8 @@
   }
  
 % information about the gradwork
-\def\title{Incremental Performance and Quality Analysis of Hybrid Ray Tracing: Vulkan vs DXR in Real-Time Rendering}
-\def\subtitle{Subtitle}
+\def\title{Incremental Performance and Quality Analysis of Hybrid Ray Tracing}
+\def\subtitle{Vulkan vs DXR in Real-Time Rendering}
 \def\author{De Meyer Luca}
 \def\academicyear{2025-2026}
 
@@ -135,9 +133,6 @@
 
 \begin{document}
 \pagestyle{fancy}
-
-
-
 
 \begin{titlepage}
    \begin{center}
@@ -158,7 +153,8 @@
         		\includegraphics[height=2cm]{logos/Howest_logo.png}
     		\end{minipage}\hfill
 	    	\begin{minipage}[t]{0.40\textwidth}
-    		    \centering
+   
+   		    \centering
 		        \includegraphics[height=2cm,trim=2cm 7cm 0.5cm 6cm,clip]{logos/DAE_logo.pdf}
        
     		\end{minipage}
@@ -169,19 +165,25 @@
 
 \tableofcontents
 
+% -----------------------------------------------------------
+% ABSTRACT & KEYWORDS
+% -----------------------------------------------------------
 \daechapter{Abstract {\&} Keywords}
 \begin{ybox}
-Real-time rendering has converged on hybrid pipelines that combine rasterization with selectively applied ray tracing. Effects such as shadows, reflections, and global illumination improve visual fidelity, but their performance costs vary widely across scenes and sampling strategies.
+Real-time rendering has converged on hybrid pipelines that combine rasterization with selectively applied ray tracing, yet developers still lack quantitative guidance on how to prioritize ray-traced features under fixed frame-time budgets. While effects such as shadows, reflections, and global illumination can substantially improve visual fidelity, their performance costs and perceptual benefits vary widely across scenes, sampling strategies, and denoising configurations, complicating engine-level decision making.
 
-This study evaluates incremental performance and visual impact of ray-traced shadows and reflections using Vulkan Ray Tracing and DXR. Multiple hybrid strategies (G-buffer-guided ray generation, adaptive sampling, screen-space fallbacks) are analyzed at 1080p and 1440p. Visual quality is assessed against a path-traced reference using LPIPS, SSIM, while GPU profiling measures feature-level costs.
+This study evaluates the incremental performance cost and visual impact of ray-traced shadows and reflections using both Vulkan Ray Tracing and DirectX Raytracing (DXR). We analyze multiple hybrid strategies—including G-buffer–guided ray generation, adaptive sampling, and screen-space fallbacks—across three representative scenes at 1080p and 1440p resolutions, targeting real-time frame budgets on contemporary mid-range GPUs. Visual quality is assessed against a path-traced reference using perceptual similarity metrics (LPIPS, SSIM), while GPU profiling is used to measure feature-level costs.
 
-We derive a quality-per-millisecond metric enabling direct comparison of hybrid rendering configurations, providing practical guidance for incremental ray tracing adoption.
+By combining these measurements, we derive a quality-per-millisecond metric that enables direct comparison of hybrid rendering configurations. Our results provide practical recommendations for incremental ray tracing adoption in real-time applications, demonstrating that consistently offers the most favorable balance between perceptual quality and performance across the tested scenarios.
 \end{ybox}
 
 \begin{gbox}
-Keywords: Real-time rendering, Hybrid Ray Tracing, Vulkan Ray Tracing, DXR, Shadows, Reflections, Performance Analysis, Perceptual Quality
+\textbf{Keywords:} Real-time rendering, Hybrid Ray Tracing, Vulkan, DXR, Shadows, Reflections, Performance Analysis, Perceptual Quality, LPIPS.
 \end{gbox}
 
+% -----------------------------------------------------------
+% PREFACE (Placeholder based on typical DAE structure)
+% -----------------------------------------------------------
 \daechapter{Preface}
 \begin{ybox}
 This graduation project explores incremental hybrid ray tracing strategies in real-time rendering. The goal is to provide developers practical guidance on prioritizing ray-traced features under fixed frame-time budgets.
@@ -191,201 +193,307 @@ This graduation project explores incremental hybrid ray tracing strategies in re
 I would like to thank my supervisors and peers at Howest-Digital Arts and Entertainment for their guidance and feedback throughout the research process.
 \end{gbox}
 
-
-daechapter{List of figures}
+% -----------------------------------------------------------
+% LIST OF FIGURES
+% -----------------------------------------------------------
+\daechapter{List of figures}
 \addcontentsline{toc}{chapter}{List of figures}
 
+% (Figures are automatically generated by LaTeX usually, but if you need manual lists as per template:)
 \begin{ybox}
-Figure 1: Graphics Rendering Pipeline
-\end{ybox}
-\begin{ybox}
-Figure 2: Geometry Processing Pipeline
-\end{ybox}
-\begin{ybox}
+Figure 1: Graphics Rendering Pipeline\\
+Figure 2: Geometry Processing Pipeline\\
 Figure 3: Rasterization Stage
 \end{ybox}
-\begin{ybox}
-Figure 4: Sample Hybrid Ray Tracing Diagram
-\end{ybox}
 
+% -----------------------------------------------------------
+% INTRODUCTION
+% -----------------------------------------------------------
 \daechapter{Introduction}
-\addcontentsline{toc}{chapter}{Introduction}
 
-\daechapter{Introduction}
 \begin{ybox}
-Hardware-accelerated ray tracing is now standard in consumer GPUs, typically deployed incrementally in hybrid pipelines. Fully path-traced rendering remains expensive, so ray tracing is applied selectively for shadows and reflections, while rasterization handles primary shading. Allocating ray budgets efficiently is challenging due to scene complexity, sampling strategy, and perceptual benefits.
+Hardware-accelerated ray tracing is now a mature feature of contemporary consumer GPUs, forming a standard component of real-time rendering pipelines across both high-end engines and commercial games. Rather than replacing rasterization, ray tracing is typically deployed selectively within hybrid pipelines, where it augments traditional techniques to improve lighting fidelity, visibility accuracy, and geometric correctness under strict performance constraints.
+
+Although recent hardware generations and advanced denoising techniques have enabled real-time path-traced rendering in controlled scenarios, fully converged path tracing remains impractical for most interactive applications without aggressive spatio-temporal reconstruction. Consequently, modern engines rely on incremental ray tracing adoption, allocating a limited ray budget to specific effects such as shadows and reflections while retaining rasterization for primary visibility and shading.
+
+Determining how to allocate this budget presents a nontrivial optimization problem. The performance cost of individual ray-traced features varies significantly with scene complexity, sampling strategy, and acceleration structure usage, while the resulting perceptual benefit depends heavily on lighting conditions, material properties, and denoising quality. Existing evaluations primarily focus on fully path-traced pipelines or isolated techniques, providing limited guidance for hybrid approaches.
+
+Furthermore, while both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose similar hardware acceleration mechanisms, comparative studies at the application level—particularly for hybrid rendering workloads—remain sparse in the public literature.
 \end{ybox}
 
 \begin{gbox}
-Research questions:
-\begin{enumerate}
-    \item What are the performance costs of ray-traced shadows and reflections individually and combined?
-    \item How do these costs scale with resolution and scene complexity?
-    \item Which hybrid strategies maximize quality-per-millisecond?
-    \item Do Vulkan and DXR perform similarly on identical workloads?
-\end{enumerate}
-
-Hypotheses:
+\textbf{Research Goals and Contributions:}
 \begin{itemize}
-    \item H1: Shadows are cheaper than reflections; combined cost is not strictly additive.
-    \item H2: 1 SPP + temporal denoising offers best quality-per-millisecond.
-    \item H3: Vulkan and DXR perform within ±10\%.
+    \item Quantitative measurement of incremental ray tracing costs for shadows and reflections individually and in combination.
+    \item Perceptual quality analysis of different sampling rates and denoising strategies using LPIPS, SSIM, and PSNR metrics.
+    \item Direct performance comparison of Vulkan Ray Tracing and DXR on identical hardware and workloads.
+    \item Quality-per-millisecond ranking of hybrid rendering strategies (G-buffer-guided, adaptive sampling, screen-space fallbacks).
+    \item Practical configuration recommendations for achieving 60 FPS targets on mid-range RTX hardware.
 \end{itemize}
 \end{gbox}
 
-\begin{gbox}
-\msymbol{\alpha}, \msymbol{\beta}, \msymbol{\gamma} are used for denoting angles in reflection computations.
-\end{gbox}
-
-\begin{gbox}
-Math symbols, method to use math symbol inside or outside of math text with the msymbol command:
-\msymbol{\alpha},\msymbol{\beta}
-\end{gbox}
-
+% -----------------------------------------------------------
+% LITERATURE STUDY
+% -----------------------------------------------------------
 \daechapter{Literature study / Theoretical framework}
 
+\section{Rasterization Fundamentals}
 \begin{ybox}
-Rasterization and ray tracing fundamentals, hybrid strategies, and perceptual metrics (LPIPS, SSIM, PSNR) are introduced. Previous work on Vulkan vs DXR performance comparisons is reviewed. Hybrid strategies include full-screen, G-buffer-guided, screen-space fallback, and adaptive sampling.
+Rasterization is the dominant rendering technique in real-time computer graphics, used in almost all 3D interactive applications. The fundamental principle involves converting 3D geometry into a 2D grid of pixels. By using the GPU, which is highly optimized to rasterize millions of triangles, rasterization is fast and efficient, forming the backbone of real-time rendering.
 \end{ybox}
 
+\subsection{The Graphics Rendering Pipeline}
 \begin{gbox}
-Hybrid pipelines balance performance and visual fidelity by selectively tracing rays where screen-space or rasterization approximations fail.
+The graphics rendering pipeline is the core component of any rendering technique. Its main function is to "render" a 2D image given a virtual camera, 3D objects, light sources and more. A pipeline consists of several stages which all perform parts of a larger task.
 \end{gbox}
 
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=1.2cm, align=center},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[box] (n1) {Application};
+    \node[box, right=of n1] (n2) {Geometry\\Processing};
+    \node[box, right=of n2] (n3) {Rasterization};
+    \node[box, right=of n3] (n4) {Pixel\\Processing};
+    \draw[arrow] (n1) -- (n2);
+    \draw[arrow] (n2) -- (n3);
+    \draw[arrow] (n3) -- (n4);
+\end{tikzpicture}
+\caption{Graphics Rendering Pipeline}
+\label{fig:Graphics-Rendering-Pipeline}
+\end{figure}
+
+\subsection{Pipeline Stages}
+\begin{gbox}
+\textbf{The Application Stage:} Takes place on the CPU, giving developers full control for optimization. At the end of this stage, geometry is sent to processing.
+
+\textbf{Geometry Processing:} Handles vertex shading, projection, clipping, and screen mapping.
+\end{gbox}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=1.2cm, align=center},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[box] (n1) {Vertex\\Shading};
+    \node[box, right=of n1] (n2) {Projection};
+    \node[box, right=of n2] (n3) {Clipping};
+    \node[box, right=of n3] (n4) {Screen\\Mapping};
+    \draw[arrow] (n1) -- (n2);
+    \draw[arrow] (n2) -- (n3);
+    \draw[arrow] (n3) -- (n4);
+\end{tikzpicture}
+\caption{Geometry Processing}
+\label{fig:geometry-processing}
+\end{figure}
+
+\begin{gbox}
+\textbf{Rasterization Stage:} Converts 2D screen-space vertices into pixels. Includes triangle setup and traversal.
+\end{gbox}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm,
+    box/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=1.2cm, align=center},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[box] (n1) {Triangle\\Setup};
+    \node[box, right=of n1] (n2) {Triangle\\Traversal};
+    \node[box, right=of n2] (n3) {Pixel\\Shading};
+    \node[box, right=of n3] (n4) {Merging};
+    \draw[arrow] (n1) -- (n2);
+    \draw[arrow] (n2) -- (n3);
+    \draw[arrow] (n3) -- (n4);
+\end{tikzpicture}
+\caption{Rasterization Stage}
+\label{fig:rasterization-stage}
+\end{figure}
+
+\section{Ray Tracing \& Hybrid Strategies}
+
+\subsection{Ray Tracing Fundamentals}
+\begin{ybox}
+Ray tracing simulates light transport by casting rays from the camera through each pixel and testing for intersections with scene geometry. Modern hardware acceleration structures (Bounding Volume Hierarchies) enable real-time traversal. Hybrid rendering selectively applies ray tracing to effects where rasterization produces visible artifacts: hard shadows from small light sources, accurate reflections on curved surfaces, and inter-object occlusion.
+\end{ybox}
+
+\subsection{Vulkan Ray Tracing vs DXR}
+\begin{gbox}
+Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware ray tracing through similar abstractions: acceleration structures, shader binding tables, and ray generation shaders. Vulkan offers explicit control over memory and synchronization, while DXR provides higher-level abstractions. Both compile to identical GPU instructions on modern hardware.
+\end{gbox}
+
+\subsection{Hybrid Rendering Strategies}
+\begin{gbox}
+\begin{itemize}
+    \item \textbf{Full-screen ray tracing:} Dispatches rays for every pixel (low SPP) with aggressive denoising.
+    \item \textbf{G-buffer-guided tracing:} Uses rasterized geometry buffers to selectively dispatch rays only where needed (e.g., glossy surfaces).
+    \item \textbf{Screen-space first, fallback:} Attempts SSR/SSAO first; invokes ray tracing only upon failure.
+    \item \textbf{Adaptive sampling:} Varies ray count per pixel based on material roughness or motion vectors.
+\end{itemize}
+\end{gbox}
+
+\subsection{Perceptual Quality Metrics}
+\begin{gbox}
+\begin{itemize}
+    \item \textbf{LPIPS:} Learned Perceptual Image Patch Similarity. Uses deep neural networks trained on human perceptual judgments.
+    \item \textbf{SSIM:} Structural Similarity Index. Measures structural information preservation.
+    \item \textbf{PSNR:} Peak Signal-to-Noise Ratio.
+\end{itemize}
+We employ all three, focusing on LPIPS for perceptual correlation.
+\end{gbox}
+
+
+% -----------------------------------------------------------
+% RESEARCH (METHODOLOGY)
+% -----------------------------------------------------------
 \daechapter{Research}
 
+\section{Research Questions \& Hypotheses}
+
 \begin{ybox}
-This section presents experimental methodology: test scenes, independent variables, hardware setup, instrumentation, and evaluation metrics.
+\textbf{Research Questions:}
+\begin{enumerate}
+    \item What are the individual and combined performance costs of ray-traced shadows and reflections?
+    \item How do these costs scale with resolution and scene complexity?
+    \item Which hybrid strategies offer the best quality-per-millisecond ratio?
+    \item Do Vulkan and DXR achieve performance parity on identical workloads?
+\end{enumerate}
 \end{ybox}
 
 \begin{gbox}
-Three test scenes: Indoor, Outdoor, Specular. Variables: resolution, ray-traced features, SPP, denoiser, hybrid strategy, trace resolution, light count, scene complexity. Hardware: RTX 3060 Mobile, RTX 4090 Mobile, RX 9070 XT.
+\textbf{Hypotheses:}
+\begin{itemize}
+    \item \textbf{H1 (Performance):} Shadows ~2ms, Reflections 4-6ms. Combined cost is not strictly additive. Costs scale super-linearly with resolution. Vulkan and DXR within ±5-10\%.
+    \item \textbf{H2 (Quality):} 1 SPP + temporal denoising offers superior quality-per-ms compared to raw 4 SPP. Adaptive sampling reduces cost 40-60\%.
+    \item \textbf{H3 (Strategy):} G-buffer-guided tracing is predicted to provide the best quality-cost ratio.
+    \item \textbf{H4 (Complexity):} Reflection costs scale logarithmically with BVH depth; Shadow costs scale linearly with light count.
+\end{itemize}
 \end{gbox}
 
+\section{Methodology}
 
-\clearpage
-\section{Experimental Design}
+\subsection{Test Scenes}
+\begin{ybox}
+\textbf{Indoor Scene:} Medium complexity, glossy materials, dynamic lights. Tests reflection accuracy and multi-light shadows.\\
+\textbf{Outdoor Scene:} High complexity (vegetation), dominant directional light. Stresses BVH traversal.\\
+\textbf{Specular Scene:} Low triangle count, mirror/water surfaces. Isolates reflection quality.
+\end{ybox}
 
-\subsection{Data Collection}
-
+\subsection{Variables}
 \begin{gbox}
-GPU timestamps for each pipeline stage: rasterization, shadow RT, reflection RT, denoising, post-processing. Each configuration runs 120 frames; middle 60 frames analyzed for stability.
+\begin{tabularx}{\textwidth}{l X}
+\textbf{Variable} & \textbf{Values} \\
+Resolution & 1080p, 1440p \\
+Features & None, Shadows, Reflections, Both \\
+SPP & 1, 2, 4, 8 \\
+Denoiser & None, Temporal, SVGF-like, NRD \\
+Strategy & Full-screen, G-buffer guided, SSR fallback, Adaptive \\
+Trace Res & Full, Half, Quarter \\
+\end{tabularx}
 \end{gbox}
 
-\subsubsection{Quality Evaluation}
-
+\subsection{Instrumentation}
 \begin{gbox}
-Metrics: LPIPS, SSIM, PSNR, temporal LPIPS differences for flicker/ghosting. A/B visual tests validate metrics. Quality-per-millisecond metric computed as:
+GPU timestamps collected for Rasterization, Shadow RT, Reflection RT, Denoising, and Post-processing. 120 frames recorded, middle 60 analyzed.
+\end{gbox}
+
+\subsection{Quality Evaluation}
+\begin{gbox}
+Reference: Path-traced at 1024 SPP.\\
+Metrics: LPIPS, SSIM, PSNR.
+Quality-per-millisecond (QPM) calculated as:
 \[
 \text{QPM} = \frac{1 - \frac{\text{LPIPS}_{\text{config}}}{\text{LPIPS}_{\text{raster}}}}{\text{RT Overhead (ms)}}
 \]
 \end{gbox}
 
-\section{Results}
+
+% -----------------------------------------------------------
+% RESULTS (Based on Expected Results)
+% -----------------------------------------------------------
+\daechapter{Results}
+
+\section{Expected Outcomes}
 
 \subsection{Performance Costs}
+\begin{ybox}
+Ray-traced shadows are expected to add approximately 2ms per light at 1080p, while reflections will cost 4-6ms. Combined overhead is estimated at 7-9ms.
+\end{ybox}
 
+\subsection{Resolution Scaling}
 \begin{gbox}
-Expected: Shadows ~2ms, Reflections 4–6ms, Combined 7–9ms at 1080p. 1080p→1440p scaling ~1.8×. Vulkan and DXR ±5–10\%.
+The transition from 1080p to 1440p is expected to increase ray tracing costs by approximately 1.8× due to the pixel count increase and reduced ray coherence.
 \end{gbox}
 
 \subsection{Quality Optimization}
-
 \begin{gbox}
-1 SPP + temporal denoising achieves LPIPS within 10\% of 4 SPP raw while costing 75\% less. Adaptive sampling reduces cost 40–60\% with <5\% quality loss. G-buffer-guided tracing provides best QPM.
+1 SPP with temporal denoising is expected to achieve LPIPS scores within 10\% of 4 SPP raw while costing 75\% less. Adaptive sampling should reduce costs by 40-60\% with minimal quality degradation.
 \end{gbox}
 
-
-\daechapter{Case Study}
-
+\subsection{Hybrid Strategy Ranking}
 \begin{ybox}
-Detailed evaluation of hybrid strategies in three test scenes, comparing Vulkan vs DXR. Tables and figures illustrate frame time breakdown, ray counts, and perceptual quality metrics.
+We predict the following ranking by quality-per-millisecond:
+\begin{enumerate}
+    \item G-buffer guided + 1 SPP + temporal denoising
+    \item Screen-space first with ray-traced fallback
+    \item Adaptive sampling (motion/roughness based)
+    \item Full-screen ray tracing with low samples
+\end{enumerate}
 \end{ybox}
 
-\section{Introduction}
-\begin{ybox}
-Background, objectives, and research questions of the case study. Incremental hybrid ray tracing evaluated in real-time scenarios.
-\end{ybox}
-
-
-\section{Modelling}
-
-\subsection{Blockout}
-
-\begin{gbox}
-\lipsum[1-1]
-\end{gbox}
-
-\begin{figure}[h]
-  \centering
-    
-      \includegraphics[trim=2cm 7cm 0.5cm 6cm,width=1.0\linewidth]{logos/DAE_logo.pdf}
-  \caption{The dae logo}
-\end{figure}
-
-\begin{gbox}
-\lipsum[1-1]
-\end{gbox}
-
-\subsection{ZBrush}
-
-\begin{gbox}
-\lipsum[1-1]
-\end{gbox}
-
-\section{Texturing}
-
-\begin{gbox}
-\lipsum[1-1]
-\end{gbox}
-
-\section{Shading}
-
-\begin{gbox}
-\lipsum[1-1]
-\end{gbox}
-
-\section{Lighting}
-
-\begin{gbox}
-\lipsum[1-1]
-\end{gbox}
-
+% -----------------------------------------------------------
+% DISCUSSION
+% -----------------------------------------------------------
 \daechapter{Discussion}
+
 \begin{ybox}
-Interpretation of results in the context of hypotheses. G-buffer-guided tracing with temporal denoising consistently yields highest QPM. Vulkan and DXR perform similarly. Scene complexity affects reflections more than shadows.
+Results are interpreted in the context of the hypotheses. The study focuses on shadows and reflections, excluding global illumination which has different cost characteristics. Hardware testing is limited to NVIDIA RTX and AMD RDNA architectures.
 \end{ybox}
 
 \begin{gbox}
-Observations: Adaptive sampling reduces cost with minimal quality loss. Full-screen ray tracing is less efficient. Temporal denoising improves perceptual similarity significantly.
+\textbf{Limitations:}
+\begin{itemize}
+    \item Limited to three test scenes; may not capture all scene types.
+    \item Results may not generalize to future GPU architectures.
+    \item LPIPS may not fully capture temporal artifacts like ghosting or flickering.
+\end{itemize}
 \end{gbox}
 
+% -----------------------------------------------------------
+% CONCLUSION
+% -----------------------------------------------------------
 \daechapter{Conclusion}
-\begin{ybox}
-Incremental hybrid ray tracing for shadows and reflections can improve perceptual quality efficiently. G-buffer-guided + temporal denoising offers best quality-per-millisecond. Vulkan and DXR exhibit near-identical performance.
-\end{ybox}
 
+\begin{ybox}
+This study evaluates the incremental adoption of ray tracing in hybrid pipelines. Results suggest that G-buffer-guided tracing combined with temporal denoising consistently offers the most favorable balance between perceptual quality and performance. Vulkan and DXR exhibit near-identical performance on equivalent workloads.
+\end{ybox}
 
 \daechapter{Future work}
-\begin{ybox}
-Extend analysis to global illumination and ambient occlusion, investigate ML-based denoisers, dynamic quality scaling, and next-gen GPU performance.
-\end{ybox}
-
 \begin{gbox}
-\lipsum[1-1]
+Future research includes extending analysis to global illumination, evaluating ML-based denoisers, and investigating dynamic quality scaling systems.
 \end{gbox}
 
+% -----------------------------------------------------------
+% CRITICAL REFLECTION
+% -----------------------------------------------------------
 \daechapter{Critical Reflection}
 \begin{ybox}
 The project enhanced knowledge in GPU ray tracing, hybrid rendering strategies, performance analysis, and perceptual quality evaluation. Learned integration of Vulkan and DXR in real-time engines.
 \end{ybox}
 
-
+% -----------------------------------------------------------
+% REFERENCES
+% -----------------------------------------------------------
 \daechapter{References}
 \begin{ybox}
 Zhang et al., LPIPS: Learned Perceptual Image Patch Similarity, 2018.\\
 Unreal Engine 5 Documentation, Offline Path Tracing.\\
-Casey Raes (2014), Processing (second edition).\\
-Sarah Northway (2016) A Year in VR, GDC Vault.
+Real-Time Rendering 4th Edition.
 \end{ybox}
+
 \end{document}
