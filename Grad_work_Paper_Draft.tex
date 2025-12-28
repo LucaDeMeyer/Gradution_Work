@@ -18,6 +18,7 @@
 \usepackage{float}
 % Page layout
 \usepackage[margin=1in]{geometry}
+\usepackage{parskip}
 
 % Code listing style (for shader/API code snippets)
 \lstset{
@@ -54,35 +55,36 @@
 \maketitle
 
 \begin{abstract}
-Real-time rendering is transitioning from pure rasterization to hybrid ray tracing, yet developers lack quantitative guidance on which ray-traced features to adopt first.
-While shadows, reflections, and global illumination each offer visual improvements, their performance costs and perceptual quality gains remain poorly characterized
-in production contexts. This study measures the incremental costs and visual quality of ray-traced shadows and reflections in Vulkan Ray Tracing and DirectX Raytracing
-(DXR), identifying configurations that achieve 60 FPS on mid-range hardware. We evaluate multiple hybrid strategies including G-buffer-guided tracing, adaptive sampling,
-and screen-space fallbacks across three representative scenes at 1080p and 1440p resolutions. Using perceptual metrics (LPIPS, SSIM) and GPU profiling, we quantify the
-quality-per-millisecond ratio for each approach. Our results provide practical recommendations for incremental ray tracing adoption in real-time applications,
- demonstrating that [placeholder for key finding] achieves the optimal balance between visual fidelity and performance.
+Real-time rendering has converged on hybrid pipelines that combine rasterization with selectively applied ray tracing, yet developers still lack quantitative guidance on how to prioritize ray-traced features under fixed frame-time budgets. While effects such as shadows, reflections, and global illumination can substantially improve visual fidelity,
+their performance costs and perceptual benefits vary widely across scenes, sampling strategies, and denoising configurations, complicating engine-level decision making.
+
+
+This study evaluates the incremental performance cost and visual impact of ray-traced shadows and reflections using both Vulkan Ray Tracing and DirectX Raytracing (DXR). We analyze multiple hybrid strategies—including G-buffer–guided ray generation, adaptive sampling,
+and screen-space fallbacks—across three representative scenes at 1080p and 1440p resolutions, targeting real-time frame budgets on contemporary mid-range GPUs. Visual quality is assessed against a path-traced reference using perceptual similarity metrics (LPIPS, SSIM),
+while GPU profiling is used to measure feature-level costs.
+
+
+By combining these measurements, we derive a quality-per-millisecond metric that enables direct comparison of hybrid rendering configurations. Our results provide practical recommendations for incremental ray tracing adoption in real-time applications, demonstrating that [key finding]
+consistently offers the most favorable balance between perceptual quality and performance across the tested scenarios.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:introduction}
 
-The advent of hardware-accelerated ray tracing in consumer GPUs (NVIDIA RTX 20-series and AMD RDNA 2) has transformed real-time rendering from a purely
-rasterization-based paradigm to a hybrid approach combining traditional techniques with ray-traced effects. While full path-traced rendering remains computationally
-prohibitive for interactive framerates, selective use of ray tracing for shadows, reflections, and ambient occlusion offers a practical middle ground between rasterization
-artifacts and photorealistic quality.
+Hardware-accelerated ray tracing is now a mature feature of contemporary consumer GPUs, forming a standard component of real-time rendering pipelines across both high-end engines and commercial games. Rather than replacing rasterization,
+ray tracing is typically deployed selectively within hybrid pipelines, where it augments traditional techniques to improve lighting fidelity, visibility accuracy, and geometric correctness under strict performance constraints.
+Although recent hardware generations and advanced denoising techniques have enabled real-time path-traced rendering in controlled scenarios, fully converged path tracing remains impractical for most interactive applications without aggressive spatio-temporal reconstruction.
+Consequently, modern engines rely on incremental ray tracing adoption, allocating a limited ray budget to specific effects such as shadows and reflections while retaining rasterization for primary visibility and shading.
 
-However, adopting ray tracing incrementally presents a complex optimization problem. Each ray-traced feature incurs a measurable performance cost, yet the perceptual
-quality improvement varies significantly based on scene characteristics, sampling strategies, and denoising techniques. Developers transitioning to hybrid rendering
-face critical questions: Which features should be ray-traced first? What sampling rates are perceptually sufficient? How do different hybrid strategies compare
-in quality-per-millisecond efficiency?
+Determining how to allocate this budget presents a nontrivial optimization problem. The performance cost of individual ray-traced features varies significantly with scene complexity, sampling strategy, and acceleration structure usage, while the resulting perceptual benefit depends
+heavily on lighting conditions, material properties, and denoising quality. As a result, the relative efficiency of ray-traced shadows, reflections, and their combinations is highly scene-dependent, complicating engine-level decision making.
 
-Existing benchmarks and research typically evaluate either full ray tracing pipelines or isolated techniques, leaving a gap in practical guidance for incremental
-adoption. Furthermore, the performance parity between Vulkan Ray Tracing and DirectX Raytracing (DXR) remains under-documented, despite both APIs targeting the same
-underlying hardware acceleration structures.
+Existing evaluations of real-time ray tracing primarily focus on either fully path-traced pipelines or isolated techniques evaluated in isolation, providing limited guidance for developers seeking to adopt ray tracing incrementally within hybrid renderers. Furthermore,
+while both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose similar hardware acceleration mechanisms, comparative studies at the application level—particularly for hybrid rendering workloads—remain sparse in the public literature.
 
-This study addresses these gaps through systematic experimentation across three representative scenes, measuring the individual and combined costs of ray-traced shadows
-and reflections. We quantify visual quality using perceptual metrics (LPIPS, SSIM, PSNR) against path-traced ground truth and derive a quality-per-millisecond metric
-to rank hybrid strategies. Our experiments span multiple resolutions, sampling rates, and optimization techniques on current RTX hardware.
+In this work, we present a systematic evaluation of hybrid ray-traced shadows and reflections across three representative real-time scenes. Using a high-sample path-traced reference as a perceptually converged baseline, we assess visual fidelity via established image similarity metrics (LPIPS, SSIM)
+and introduce a quality-per-millisecond metric to compare the efficiency of different hybrid strategies. Our experiments span multiple resolutions, sampling rates, and denoising configurations on modern hardware-accelerated ray tracing GPUs, with the goal of providing practical guidance for
+performance-conscious ray tracing integration in real-time engines.
 
 \subsection{Contributions}
 \label{subsec:contributions}
@@ -291,7 +293,8 @@ Three representative scenes are selected to cover different performance and qual
 
 \textbf{Specular Scene:} Low triangle count but multiple mirror and water-like surfaces. This scene isolates reflection quality and tests handling of highly reflective materials where screen-space techniques fail.
 
-Each scene includes a scripted camera path ensuring reproducible viewpoints across all test runs. Ground-truth reference images are generated using 1024 SPP path tracing for perceptual quality comparison.
+Each scene includes a scripted camera path ensuring reproducible viewpoints across all test runs. High-sample path-traced reference images are generated at 1024 samples per pixel using Unreal Engine 5’s offline path tracer.
+
 
 \subsection{Independent Variables}
 \label{subsec:variables}
@@ -326,7 +329,7 @@ Experiments are conducted on three representative hardware configurations:
 \begin{itemize}
     \item \textbf{Mid-range laptop:} RTX 3060 Mobile (6GB), Ryzen 5800H, 16GB RAM
     \item \textbf{High-end laptop:} RTX 4090 Mobile (16GB), i9-13980HX, 32GB RAM
-    \item \textbf{Desktop:} AMD Radeon RX 9070 XT (16GB), Ryzen 7950X, 32GB RAM
+    \item \textbf{Desktop:} AMD Radeon RX 9070 XT (16GB), Ryzen 9900X, 32GB RAM
 \end{itemize}
 
 Software environment: Windows 11, Vulkan SDK 1.3.x, DXR via DirectX 12. All drivers updated to latest stable versions. Power settings configured for maximum performance with adequate cooling
@@ -361,13 +364,13 @@ Image buffers (final color, G-buffer components, motion vectors, depth) are capt
 \subsection{Image Quality Evaluation}
 \label{subsec:quality-eval}
 
-Perceptual quality is evaluated against path-traced ground truth using three complementary metrics:
+Perceptual quality is evaluated against a high-sample path-traced reference using three complementary metrics:
 
 \textbf{LPIPS (Learned Perceptual Image Patch Similarity):} Primary metric for perceptual quality, computed using the pretrained AlexNet-based model from Zhang et al. Lower values indicate higher perceptual similarity.
 
 \textbf{SSIM (Structural Similarity Index):} Measures structural information preservation. Computed over 11×11 windows with standard parameters.
 
-\textbf{PSNR (Peak Signal-to-Noise Ratio):} Traditional pixel-wise difference metric, included for completeness and comparison with prior work.
+While this reference does not represent absolute physical ground truth, a sufficiently high sample count provides a stable and perceptually converged baseline suitable for comparative evaluation of real-time techniques.
 
 Temporal stability is measured by computing frame-to-frame LPIPS differences along the camera path, detecting flickering and ghosting artifacts.
 
