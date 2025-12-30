@@ -28,7 +28,7 @@
 \usepackage{fancyhdr}
 % Combined TikZ libraries from template and draft
 \usetikzlibrary{calc,arrows.meta,backgrounds,shapes.geometric,positioning}
-
+\setlength{\parindent}{0pt}
 \newcommand{\msymbol}[1]{\ifmmode #1 \else $#1$\fi}
 
 \newcommand{\daemathvariable}[1]{{\normalsize \color[RGB]{100,149,237}#1}}
@@ -169,13 +169,15 @@
 % ABSTRACT & KEYWORDS
 % -----------------------------------------------------------
 \daechapter{Abstract {\&} Keywords}
-\begin{ybox}
-Real-time rendering has converged on hybrid pipelines that combine rasterization with selectively applied ray tracing, yet developers still lack quantitative guidance on how to prioritize ray-traced features under fixed frame-time budgets. While effects such as shadows, reflections, and global illumination can substantially improve visual fidelity, their performance costs and perceptual benefits vary widely across scenes, sampling strategies, and denoising configurations, complicating engine-level decision making.
 
-This study evaluates the incremental performance cost and visual impact of ray-traced shadows and reflections using both Vulkan Ray Tracing and DirectX Raytracing (DXR). We analyze multiple hybrid strategies—including G-buffer–guided ray generation, adaptive sampling, and screen-space fallbacks—across three representative scenes at 1080p and 1440p resolutions, targeting real-time frame budgets on contemporary mid-range GPUs. Visual quality is assessed against a path-traced reference using perceptual similarity metrics (LPIPS, SSIM), while GPU profiling is used to measure feature-level costs.
-
-By combining these measurements, we derive a quality-per-millisecond metric that enables direct comparison of hybrid rendering configurations. Our results provide practical recommendations for incremental ray tracing adoption in real-time applications, demonstrating that consistently offers the most favorable balance between perceptual quality and performance across the tested scenarios.
-\end{ybox}
+Real-time rendering has converged on hybrid pipelines that combine rasterization with selectively applied ray tracing, yet developers still lack quantitative guidance on how to prioritize ray-traced features under fixed frame-time budgets.
+While effects such as shadows, reflections, and global illumination can substantially improve visual fidelity, their performance costs and perceptual benefits vary widely across scenes, sampling strategies, and denoising configurations,
+complicating engine-level decision making.
+This study evaluates the incremental performance cost and visual impact of ray-traced shadows and reflections using both Vulkan Ray Tracing and DirectX Raytracing (DXR). We analyze multiple hybrid strategies—including G-buffer–guided ray generation,
+adaptive sampling, and screen-space fallbacks—across three representative scenes at 1080p and 1440p resolutions, targeting real-time frame budgets on contemporary mid-range GPUs. Visual quality is assessed against a path-traced reference using perceptual
+similarity metrics (LPIPS, SSIM), while GPU profiling is used to measure feature-level costs.
+By combining these measurements, we derive a quality-per-millisecond metric that enables direct comparison of hybrid rendering configurations. Our results provide practical recommendations for incremental ray tracing adoption in real-time applications,
+demonstrating that consistently offers the most favorable balance between perceptual quality and performance across the tested scenarios.
 
 \begin{gbox}
 \textbf{Keywords:} Real-time rendering, Hybrid Ray Tracing, Vulkan, DXR, Shadows, Reflections, Performance Analysis, Perceptual Quality, LPIPS.
@@ -210,28 +212,29 @@ Figure 3: Rasterization Stage
 % INTRODUCTION
 % -----------------------------------------------------------
 \daechapter{Introduction}
+Hardware-accelerated ray tracing is now a mature feature of contemporary consumer GPUs, forming a standard component of real-time rendering pipelines across both high-end engines and commercial games. Rather than replacing rasterization,
+ ray tracing is typically deployed selectively within hybrid pipelines, where it augments traditional techniques to improve lighting fidelity, visibility accuracy, and geometric correctness under strict performance constraints.
 
-\begin{ybox}
-Hardware-accelerated ray tracing is now a mature feature of contemporary consumer GPUs, forming a standard component of real-time rendering pipelines across both high-end engines and commercial games. Rather than replacing rasterization, ray tracing is typically deployed selectively within hybrid pipelines, where it augments traditional techniques to improve lighting fidelity, visibility accuracy, and geometric correctness under strict performance constraints.
+Although recent hardware generations and advanced denoising techniques have enabled real-time path-traced rendering in controlled scenarios, fully converged path tracing remains impractical for most interactive applications without aggressive
+spatio-temporal reconstruction. Consequently, modern engines rely on incremental ray tracing adoption, allocating a limited ray budget to specific effects such as shadows and reflections while retaining rasterization for primary visibility and shading.
 
-Although recent hardware generations and advanced denoising techniques have enabled real-time path-traced rendering in controlled scenarios, fully converged path tracing remains impractical for most interactive applications without aggressive spatio-temporal reconstruction. Consequently, modern engines rely on incremental ray tracing adoption, allocating a limited ray budget to specific effects such as shadows and reflections while retaining rasterization for primary visibility and shading.
-
-Determining how to allocate this budget presents a nontrivial optimization problem. The performance cost of individual ray-traced features varies significantly with scene complexity, sampling strategy, and acceleration structure usage, while the resulting perceptual benefit depends heavily on lighting conditions, material properties, and denoising quality. Existing evaluations primarily focus on fully path-traced pipelines or isolated techniques, providing limited guidance for hybrid approaches.
+Determining how to allocate this budget presents a nontrivial optimization problem. The performance cost of individual ray-traced features varies significantly with scene complexity, sampling strategy, and acceleration structure usage,
+while the resulting perceptual benefit depends heavily on lighting conditions, material properties, and denoising quality. Existing evaluations primarily focus on fully path-traced pipelines or isolated techniques, providing limited guidance
+for hybrid approaches.
 
 Furthermore, while both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose similar hardware acceleration mechanisms, comparative studies at the application level—particularly for hybrid rendering workloads—remain sparse in the public literature.
-\end{ybox}
+
 
 \begin{gbox}
 \textbf{Research Goals and Contributions:}
 \begin{itemize}
     \item Quantitative measurement of incremental ray tracing costs for shadows and reflections individually and in combination.
-    \item Perceptual quality analysis of different sampling rates and denoising strategies using LPIPS, SSIM, and PSNR metrics.
+    \item Perceptual quality analysis of different sampling rates and denoising strategies using LPIPS, SSIM metrics.
     \item Direct performance comparison of Vulkan Ray Tracing and DXR on identical hardware and workloads.
     \item Quality-per-millisecond ranking of hybrid rendering strategies (G-buffer-guided, adaptive sampling, screen-space fallbacks).
     \item Practical configuration recommendations for achieving 60 FPS targets on mid-range RTX hardware.
 \end{itemize}
 \end{gbox}
-
 % -----------------------------------------------------------
 % LITERATURE STUDY
 % -----------------------------------------------------------
@@ -239,12 +242,16 @@ Furthermore, while both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose s
 
 \section{Rasterization Fundamentals}
 \begin{ybox}
-Rasterization is the dominant rendering technique in real-time computer graphics, used in almost all 3D interactive applications. The fundamental principle involves converting 3D geometry into a 2D grid of pixels. By using the GPU, which is highly optimized to rasterize millions of triangles, rasterization is fast and efficient, forming the backbone of real-time rendering.
+Rasterization is the dominant rendering technique in real-time computer graphics, used in almost all 3D interactive applications.
+The fundamental principle involves converting 3D geometry into a 2D grid of pixels. By using the GPU, which is highly optimized to rasterize millions of triangles, rasterization is fast and efficient, forming the backbone of real-time rendering.
 \end{ybox}
 
 \subsection{The Graphics Rendering Pipeline}
 \begin{gbox}
-The graphics rendering pipeline is the core component of any rendering technique. Its main function is to "render" a 2D image given a virtual camera, 3D objects, light sources and more. A pipeline consists of several stages which all perform parts of a larger task.
+The graphics rendering pipeline is the core component of any rendering technique. Its main function is to "render" a 2D image given a virtual camera, 3D objects, light sources and more.
+A pipeline consists of several stages which all perform parts of a larger task. Locations and shapes of objects are determined by that objects geometry, camera movement in the environment and characteristics of the ennvironment.
+The Obejcts appearence is affected by its materials, shading equations and light sources. I will briefly go over each stage with the focus on function.
+%rewritten later
 \end{gbox}
 
 \begin{figure}[H]
@@ -267,11 +274,59 @@ The graphics rendering pipeline is the core component of any rendering technique
 \end{figure}
 
 \subsection{Pipeline Stages}
-\begin{gbox}
-\textbf{The Application Stage:} Takes place on the CPU, giving developers full control for optimization. At the end of this stage, geometry is sent to processing.
+\paragraph{The Application Stage:}
 
-\textbf{Geometry Processing:} Handles vertex shading, projection, clipping, and screen mapping.
-\end{gbox}
+This stage typically executes on the CPU and provides developers with full control over rendering behavior. As a result, it can be extensively customized to suit application-specific requirements.
+Decisions made during this stage—such as draw call organization, resource binding, and state changes—can significantly impact the performance of subsequent pipeline stages. At the end of the application stage,
+geometry and associated data are submitted to the GPU for further processing.
+
+\paragraph{Geometry Processing:}
+
+ Geometry processing is divided into four distinct substages within the graphics pipeline.
+
+\paragraph{Vertex Shading:}
+The vertex shading stage is a fully programmable stage responsible for transforming vertex data and preparing per-vertex attributes for subsequent pipeline stages.
+Its primary function is to compute vertex positions by transforming them from object space through world and view space into clip space using the appropriate transformation matrices.
+In addition, the vertex shader evaluates and outputs any per-vertex attributes required later in the pipeline, such as normals, texture coordinates, tangents, or user-defined data.
+
+Historically, vertex shading also performed a significant portion of lighting calculations by evaluating illumination at each vertex and interpolating the resulting color across primitives.
+With modern GPUs and the widespread adoption of per-pixel shading, most lighting computations have shifted to later stages. As a result, the vertex shading stage now primarily serves as a general-purpose setup stage,
+handling tasks such as geometry transformation, vertex skinning, and attribute preparation rather than direct lighting evaluation.
+
+Every graphics pipeline includes the vertex processing stage described above; however, additional optional programmable stages may be executed on the GPU depending on both hardware capabilities and the requirements of the application.
+Not all GPUs support these stages, and their use is determined by the programmer based on the desired visual fidelity and performance constraints.
+\paragraph{Tesellation:}
+
+Tessellation addresses the problem of efficiently rendering curved or highly detailed surfaces. For example, a spherical object may appear smooth when viewed from a distance but reveal its underlying triangular structure when observed up close.
+One way to address this would be to increase the geometric complexity of the mesh uniformly; however, this approach wastes processing resources when high detail is unnecessary.
+Tessellation enables the dynamic refinement of geometry by increasing the number of triangles only where additional detail is required.
+
+The tessellation stage consists of three distinct substages: the hull shader, the fixed-function tessellator, and the domain shader. Geometry is initially described as a set of patches, where each patch is defined by a small number of control vertices.
+The hull shader determines tessellation factors for each patch, often based on criteria such as distance from the camera or surface curvature. The tessellator then subdivides the patches into a finer set of primitives,
+and the domain shader evaluates the final vertex positions of the generated geometry. This process allows the level of geometric detail to adapt dynamically based on the camera’s position relative to the surface.
+\paragraph{Geometry shader:}
+
+The geometry shader is an optional programmable stage that operates after vertex processing and primitive assembly. Unlike tessellation, which is designed for adaptive geometric refinement,
+the geometry shader processes complete primitives (such as points, lines, or triangles) and can emit zero or more output primitives. While geometry shaders are more widely supported than tessellation on older hardware,
+they are significantly more limited in throughput and output flexibility.
+
+The geometry shader is commonly used for tasks such as particle expansion, procedural geometry generation, primitive amplification, and geometry-based effects that require access to entire primitives rather than individual vertices.
+However, due to its relatively high performance cost and limited parallelism, the geometry shader is generally avoided in performance-critical real-time rendering pipelines and has largely been supplanted by compute shaders or alternative techniques in
+modern engines.
+
+\paragraph{Stream Output:}
+Stream output is an optional pipeline feature that enables vertex or geometry shader output to be captured directly into GPU buffers for reuse in later rendering passes,
+avoiding CPU readback. While useful for certain techniques such as GPU-based particle simulation or procedural geometry generation, stream output is infrequently used in modern real-time rendering pipelines and has limited relevance
+to hybrid ray tracing workflows.
+
+\paragraph{Clipping: }
+Clipping is a fixed-function stage that removes or trims primitives that lie partially or entirely outside the view frustum. Geometry that falls completely outside the frustum is discarded, while primitives intersecting
+the frustum boundaries are clipped to ensure that only visible portions proceed further in the pipeline. This step ensures correctness and prevents unnecessary processing in later stages.
+
+ \paragraph{Screen Mapping: }
+After clipping, vertex positions in clip space undergo perspective division, transforming them into normalized device coordinates.
+These coordinates are then mapped to screen space through the viewport transformation, converting the three-dimensional scene representation into two-dimensional screen coordinates suitable for rasterization.
+
 
 \begin{figure}[H]
 \centering
@@ -288,13 +343,13 @@ The graphics rendering pipeline is the core component of any rendering technique
     \draw[arrow] (n2) -- (n3);
     \draw[arrow] (n3) -- (n4);
 \end{tikzpicture}
-\caption{Geometry Processing}
-\label{fig:geometry-processing}
+\caption{Geometry Processing}\label{fig:geometry-processing}
 \end{figure}
 
-\begin{gbox}
-\textbf{Rasterization Stage:} Converts 2D screen-space vertices into pixels. Includes triangle setup and traversal.
-\end{gbox}
+\paragraph{Rasterization Stage:} Rasterization converts screen-space primitives into fragments corresponding to pixel locations on the render target.
+During this process, per-vertex attributes such as texture coordinates, normals, and colors are interpolated across each primitive. The resulting fragments are then passed to the fragment shading stage, where per-pixel operations such as shading,
+texturing, and depth testing are performed.
+
 
 \begin{figure}[H]
 \centering
@@ -342,7 +397,6 @@ Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware ray tracing
 \begin{itemize}
     \item \textbf{LPIPS:} Learned Perceptual Image Patch Similarity. Uses deep neural networks trained on human perceptual judgments.
     \item \textbf{SSIM:} Structural Similarity Index. Measures structural information preservation.
-    \item \textbf{PSNR:} Peak Signal-to-Noise Ratio.
 \end{itemize}
 We employ all three, focusing on LPIPS for perceptual correlation.
 \end{gbox}
@@ -405,7 +459,7 @@ GPU timestamps collected for Rasterization, Shadow RT, Reflection RT, Denoising,
 \subsection{Quality Evaluation}
 \begin{gbox}
 Reference: Path-traced at 1024 SPP.\\
-Metrics: LPIPS, SSIM, PSNR.
+Metrics: LPIPS, SSIM
 Quality-per-millisecond (QPM) calculated as:
 \[
 \text{QPM} = \frac{1 - \frac{\text{LPIPS}_{\text{config}}}{\text{LPIPS}_{\text{raster}}}}{\text{RT Overhead (ms)}}
