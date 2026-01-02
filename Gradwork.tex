@@ -26,7 +26,6 @@
 \usepackage{lastpage}
 
 \usepackage{fancyhdr}
-% Combined TikZ libraries from template and draft
 \usetikzlibrary{calc,arrows.meta,backgrounds,shapes.geometric,positioning}
 \setlength{\parindent}{0pt}
 \newcommand{\msymbol}[1]{\ifmmode #1 \else $#1$\fi}
@@ -59,8 +58,9 @@
 }
 
 \newcommand{\daesection}[1]{
-  \section*{#1} % Create an unnumbered chapter
-  \addcontentsline{toc}{chapter}{#1} % Add the chapter to the ToC
+  \refstepcounter{section} % Increment section counter manually
+  \section*{\thesection\quad #1} % Show number in title
+  \addcontentsline{toc}{section}{\thesection\quad #1}
 }
 
 \newtcolorbox{ybox}{
@@ -239,18 +239,23 @@ Furthermore, while both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose s
 % LITERATURE STUDY
 % -----------------------------------------------------------
 \daechapter{Literature study / Theoretical framework}
-
-\section{Rasterization Fundamentals}
+%real-time rendering
+\daesection{Rasterization Fundamentals}
 \begin{ybox}
 Rasterization is the dominant rendering technique in real-time computer graphics, used in almost all 3D interactive applications.
 The fundamental principle involves converting 3D geometry into a 2D grid of pixels. By using the GPU, which is highly optimized to rasterize millions of triangles, rasterization is fast and efficient, forming the backbone of real-time rendering.
 \end{ybox}
 
+Understanding rasterization requires a structured view of how modern GPUs transform scene data into pixels, which is formalized by the graphics rendering pipeline.
+
+
 \subsection{The Graphics Rendering Pipeline}
 \begin{gbox}
-The graphics rendering pipeline is the core component of any rendering technique. Its main function is to "render" a 2D image given a virtual camera, 3D objects, light sources and more.
-A pipeline consists of several stages which all perform parts of a larger task. Locations and shapes of objects are determined by that objects geometry, camera movement in the environment and characteristics of the ennvironment.
-The Obejcts appearence is affected by its materials, shading equations and light sources. I will briefly go over each stage with the focus on function.
+The graphics rendering pipeline is the fundamental framework through which a 3D scene is transformed into a 2D image for display. 
+Its primary function is to generate an image from a virtual camera by processing scene geometry, materials, lighting, and other environmental parameters.
+The pipeline is composed of multiple stages, each performing a specific part of the overall rendering process. 
+Object positions and shapes are determined by their geometric data and transformations, while their appearance is influenced by material properties, shading models, and the scene's light sources. 
+The following sections provides a brief overview of each stage, focusing on their functional roles within the pipeline.
 %rewritten later
 \end{gbox}
 
@@ -366,20 +371,146 @@ texturing, and depth testing are performed.
     \draw[arrow] (n2) -- (n3);
     \draw[arrow] (n3) -- (n4);
 \end{tikzpicture}
-\caption{Rasterization Stage}
-\label{fig:rasterization-stage}
+\caption{Rasterization Stage}\label{fig:rasterization-stage}
 \end{figure}
+%real-time rendering
+\daesection{GPU Parallelism and the Graphics Pipeline}
 
-\section{Ray Tracing \& Hybrid Strategies}
+\subsection{GPU Parallelism Model}
+Massive data parallelism
 
+SIMT / SIMD execution
+
+Warps / wavefronts (vendor-agnostic language)
+
+\subsection{Fixed-Function vs Programmable Stages}
+Fixed-function: rasterizer, clipping, interpolation
+
+Programmable: shaders, compute
+\subsection{Memory Hierarchy \& Bandwidth}
+Registers, shared memory, caches
+
+Global memory and bandwidth pressure
+
+Render targets and G-buffers
+\subsection{Asynchronous \& Compute Capabilities}
+Async compute
+
+Overlapping raster + ray workloads
+
+Compute shaders replacing geometry stages
+
+\daesection{Rendering Pipeline Variants}
+%learn opengl, deferred-shading chapter
+\subsection{Forward Rendering}
+In a forward rendering pipeline, scene geometry is rasterized and shaded in a single pass, with lighting computations performed directly during fragment shading.
+Each visible fragment evaluates the contribution of relevant light sources to produce its final color.
+This approach is conceptually simple and aligns closely with the traditional graphics pipeline, making it straightforward to implement and well suited for scenes with a limited number of lights.
+
+However, the computational cost of forward rendering scales with both the number of fragments and the number of active light sources.
+In scenes with many lights, each fragment must evaluate multiple lighting equations, resulting in increased shading cost and reduced performance.
+Furthermore, forward rendering is susceptible to high overdraw in scenes with significant depth complexity, where multiple fragments may be shaded before being rejected by depth testing.
+
+Despite these limitations, forward rendering handles transparency naturally, as shading is performed in depth-sorted order.
+This makes it well suited for effects such as particles and alpha-blended geometry, which remain challenging for alternative pipeline designs.
+
+Modern variants such as Forward+ mitigate these costs through screen-space light culling, though lighting computations remain tightly coupled to fragment shading.
+\subsection{Deferred Rendering}
+To address the scalability limitations of forward rendering in scenes with many dynamic light sources, deferred rendering separates geometry processing from lighting evaluation.
+Instead of computing lighting during rasterization, deferred rendering divides the pipeline into two distinct passes: a geometry pass and a lighting pass.\\
+
+During the geometry pass, the entire scene is rendered once, and relevant per-fragment attributes—such as world-space position or depth, surface normals, albedo, and material properties—are written to a set of render targets collectively referred
+to as the G-buffer.
+Depth testing is performed during this stagealternatively, the programmer may employ a depth pre-pass executed prior to the G-buffer pass.
+A depth pre-pass ensures that only the closest visible fragment at each pixel contributes to the stored G-buffer data, reducing overdraw and unnecessary fragment shading.\\
+
+In the subsequent lighting pass, lighting calculations are performed in screen space by sampling the G-buffer.
+Because lighting is evaluated only for visible fragments, the cost of shading scales primarily with screen resolution rather than scene complexity.
+This makes deferred rendering particularly well suited for scenes with a large number of dynamic light sources.\\
+
+Despite its advantages, deferred rendering introduces several challenges.
+Storing multiple high-resolution render targets significantly increases memory usage and bandwidth requirements.
+Additionally, traditional deferred pipelines do not natively support hardware multisample anti-aliasing (MSAA), and handling transparency is non-trivial due to the decoupling of geometry and lighting.
+As a result, deferred rendering pipelines often combine multiple techniques to address these limitations.
+
+\subsubsection{G-Buffer}
+The G-buffer is a collection of screen-space render targets that store per-fragment geometric and material information required for subsequent lighting evaluation.
+Typical contents include:
+
+\begin{itemize}
+    \item \textbf{World-space position vectors:} Used to reconstruct the 3D location of each fragment for lighting and shading calculations.
+    \item \textbf{Surface normals:} Required for accurate lighting, reflections, and shading computations.
+    \item \textbf{Albedo (diffuse color):} Stores the base color of the surface without lighting applied.
+    \item \textbf{Additional material properties (optional):} Such as roughness, metallicity, and specular intensity for physically based rendering workflows.
+\end{itemize}
+
+These buffers collectively allow the lighting pass to operate independently of scene geometry, enabling deferred shading and efficient evaluation of multiple light sources.
+
+
+\subsubsection{Lighting Pass}
+The lighting pass operates entirely in screen space, reconstructing surface properties from the G-buffer to compute lighting contributions for each visible pixel.
+Because only the closest visible fragments are stored in the G-buffer, lighting computations are performed solely for pixels that will contribute to the final image, improving performance in scenes with high depth complexity.
+Multiple light sources can be evaluated in this pass without re-rendering the geometry, making deferred rendering particularly advantageous for scenes with numerous dynamic lights.
+
+
+\daesection{Ray Tracing \& Hybrid Strategies}
+% using ray tracing gems 1 , chapter 1-2
 \subsection{Ray Tracing Fundamentals}
-\begin{ybox}
-Ray tracing simulates light transport by casting rays from the camera through each pixel and testing for intersections with scene geometry. Modern hardware acceleration structures (Bounding Volume Hierarchies) enable real-time traversal. Hybrid rendering selectively applies ray tracing to effects where rasterization produces visible artifacts: hard shadows from small light sources, accurate reflections on curved surfaces, and inter-object occlusion.
-\end{ybox}
+Ray tracing is a rendering technique that simulates the physical behavior of light by tracing rays through a scene. 
+The process begins with \emph{ray casting}, where rays are emitted from the camera and intersect with scene geometry to determine visible surfaces. 
+From each intersection point, secondary rays can be cast toward light sources to evaluate shadowing, or recursively into the scene to capture reflections and refractions.
+
+To limit computational cost, a maximum recursion depth, or \emph{bounce limit}, is typically imposed. The resulting tree of rays is evaluated in reverse order, propagating light contributions back to the camera to compute the final shading.
+
+Several variants of ray tracing exist:
+\begin{itemize}
+    \item \textbf{Whitted (classical) ray tracing:} Assumes perfectly specular and smooth surfaces, with light sources represented as discrete directions. Each intersection generates reflection, refraction, and shadow rays as needed.
+    \item \textbf{Cook or stochastic ray tracing:} Introduces probabilistic sampling at each intersection, allowing multiple rays to be emitted per node to produce effects such as glossy reflections, soft shadows, and indirect illumination.
+    \item \textbf{Path tracing:} Uses stochastic sampling to estimate the full light transport equation. Rays are traced from the camera, and at each intersection, incoming light directions are sampled according to the surface’s material properties.
+     This approach captures global illumination, including multiple bounces, soft shadows, and color bleeding.
+\end{itemize}
+
+\subsection{What is a Ray?}
+A ray is a three-dimensional half-line, usually defined by an \daemathvariable{origin point O} and a \daemathvariable{direction vector D}. 
+Unlike a 2D line, which can be expressed as \daemath{y = mx + b}, a 3D ray can be written in parametric form:\\
+
+\daemath{P(t) = O + t D}, with $t \ge 0$\\
+
+%cant use greater than  symbol in daemath?
+Here, \daemathvariable{P(t)} denotes a point along the ray, \daemathvariable{t} is a scalar parameter, 
+\daemathvariable{O} is the \emph{ray origin}, and \daemathvariable{D} is the \emph{ray direction}. 
+The condition \daemathvariable{t} $\ge$ \daemathvariable{0} ensures the half-line extends only in the direction of D.\\
+
+%need the ray segement from ray tracing gems chapter 2 here somewhere
+\paragraph{Ray Types:}
+Rays are often categorized depending on their role in rendering:
+\begin{itemize}
+    \item \textbf{Primary rays:} start at the camera, passing through pixels to determine visible surfaces.
+    \item \textbf{Shadow rays:} shot from surface intersections to light sources to determine occlusion.
+    \item \textbf{Reflection rays:} generated from reflective surfaces along mirror directions.
+    \item \textbf{Refraction rays:} travel through transparent or refractive surfaces according to Snell’s law.
+    \item \textbf{Eye rays vs. light rays:} primary rays are “eye rays” from the camera, while secondary rays can be considered “light rays” contributing to illumination.
+\end{itemize}
+In recursive ray tracing, rays are typically traced up to a **maximum bounce limit** to avoid infinite recursion and to limit computation.
+
+%maybe how we represent rays in code here?
+
+\subsection{Ray-tracing algorithm}
+\begin{itemize}
+\item{ray generation}
+\item {ray intersection}
+\item {shading}
+\end{itemize}
+
+\textbf{for} each pixel \textbf{do}\\
+compute viewing ray\\
+find first object hit by ray and its surface normal n\\
+set pixel color to value computed from hit point, light, and n
 
 \subsection{Vulkan Ray Tracing vs DXR}
 \begin{gbox}
-Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware ray tracing through similar abstractions: acceleration structures, shader binding tables, and ray generation shaders. Vulkan offers explicit control over memory and synchronization, while DXR provides higher-level abstractions. Both compile to identical GPU instructions on modern hardware.
+Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware ray tracing through similar abstractions: acceleration structures, shader binding tables, and ray generation shaders. Vulkan offers explicit control over memory and synchronization,
+while DXR provides higher-level abstractions. Both compile to identical GPU instructions on modern hardware.
 \end{gbox}
 
 \subsection{Hybrid Rendering Strategies}
@@ -401,13 +532,18 @@ Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware ray tracing
 We employ all three, focusing on LPIPS for perceptual correlation.
 \end{gbox}
 
+\subsection{Motivation for Hybrid Ray Tracing}
+
+\subsection{Cost Characteristics of Ray-Traced Shadows and Reflections}
+
+\subsection{Limitations of Traditional Image Quality Metrics}
 
 % -----------------------------------------------------------
 % RESEARCH (METHODOLOGY)
 % -----------------------------------------------------------
 \daechapter{Research}
 
-\section{Research Questions \& Hypotheses}
+\daesection{Research Questions \& Hypotheses}
 
 \begin{ybox}
 \textbf{Research Questions:}
@@ -429,7 +565,7 @@ We employ all three, focusing on LPIPS for perceptual correlation.
 \end{itemize}
 \end{gbox}
 
-\section{Methodology}
+\daesection{Methodology}
 
 \subsection{Test Scenes}
 \begin{ybox}
@@ -466,13 +602,32 @@ Quality-per-millisecond (QPM) calculated as:
 \]
 \end{gbox}
 
+\daechapter{Implementation}
+
+\daesection{Rasterization Baseline and Deferred Rendering}
+
+\subsection{Fragment Shading in the Rasterization Pass}
+
+\subsection{Deferred Rendering Architecture}
+
+\subsection{G-buffer Layout and Data Encoding}
+
+\subsection{Lighting Pass}
+
+\daesection{Hybrid Ray Tracing Integration}
+
+\subsection{G-buffer–Guided Ray Generation}
+
+\subsection{Ray-Traced Shadows}
+
+\subsection{Ray-Traced Reflections}
 
 % -----------------------------------------------------------
 % RESULTS (Based on Expected Results)
 % -----------------------------------------------------------
 \daechapter{Results}
 
-\section{Expected Outcomes}
+\daesection{Expected Outcomes}
 
 \subsection{Performance Costs}
 \begin{ybox}
