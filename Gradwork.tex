@@ -261,12 +261,9 @@ DXR is discussed in the theoretical framework for context, but experimental eval
 \daechapter{Literature study / Theoretical framework}
 
 \daesection{Rasterization Fundamentals}
-Rasterization is the dominant rendering technique in real-time computer graphics, used in almost all 3D interactive applications.
-The fundamental principle involves converting 3D geometry into a 2D grid of pixels. By using the GPU, which is highly optimized to rasterize millions of triangles, rasterization is fast and efficient, forming the backbone of real-time rendering.\\
-
-
-Understanding rasterization requires a structured view of how modern GPUs transform scene data into pixels, which is formalized by the graphics rendering pipeline.
-
+Rasterization is the dominant technique in real-time computer graphics, used in almost all 3D interactive applicaitons. The fundammental principal involes converting 3D geometry into a 2D grid of pixels.
+By using the GPU, which is highly optimised to rasterize millions of triangles, rasterization is fast and efficient, forming the backbone of real-time rendering.
+Understanding rasterization requires a structured view of how modern GPUs transform scene data into pizels, which is formailzed by the graphics rendering pipeline.\cite{Marshner2016FCP}
 
 \subsection{Rasterization Baseline for Hybrid Ray Tracing}
 
@@ -312,8 +309,7 @@ therefore omitted from further discussion.
 For the purposes of this thesis, the primary role of rasterization is not the
 production of a fully shaded image, but the efficient generation of screen-space
 buffers encoding geometric and material information required for deferred
-lighting, ray tracing, and spatiotemporal reconstruction.
-\cite{akenine2018realtimerendering, learnopengl}
+lighting, ray tracing, and spatiotemporal reconstruction.\cite{akenine2018realtimerendering, learnopengl}
 %real-time rendering
 \daesection{Rendering Pipeline Variants}
 %learn opengl, deferred-shading chapter
@@ -335,10 +331,9 @@ coupled to fragment shading.
 Deferred rendering separates geometry processing from lighting evaluation by
 dividing the pipeline into two distinct passes: a geometry pass and a lighting
 pass.
-
 During the geometry pass, the scene is rasterized once and per-fragment
-attributes such as surface normals, albedo, material parameters, and depth are
-written to a set of render targets collectively referred to as the G-buffer.
+attributes such as surface normals, albedo, material parameters, and depth
+are written to a set of render targets collectively referred to as the G-buffer.
 Depth testing is performed during this stage; optionally, a depth pre-pass may
 be executed prior to G-buffer generation to reduce overdraw and unnecessary
 fragment shading.
@@ -346,7 +341,7 @@ fragment shading.
 In the lighting pass, illumination is computed in screen space by sampling the
 G-buffer. Because lighting is evaluated only for visible fragments, the cost of
 shading scales primarily with screen resolution rather than scene complexity,
-making deferred rendering well suited for scenes with many dynamic lights.
+making deferred rendering well suited for scenes with many dynamic lights.\cite{fernando2004gpugems}
 
 Deferred rendering introduces trade-offs, including increased memory usage and
 bandwidth requirements due to multiple render targets. Additionally, handling
@@ -376,8 +371,6 @@ These buffers collectively allow the lighting pass to operate independently of s
     label text/.style={font=\footnotesize\sffamily, align=center},
     arrow/.style={-{Stealth[length=3mm]}, thick, color=fontSubsection, rounded corners=5pt}
 ]
-
-    % Main Geometry Pass Node - Moved higher up
     \node[screen, fill=bgSection, minimum width=6cm] (geometrypass) {Geometry Pass\\ \footnotesize (Rasterizes Scene)};
 
     % --- G-BUFFER TARGETS ---
@@ -385,28 +378,22 @@ These buffers collectively allow the lighting pass to operate independently of s
     \node[screen, below=2cm of geometrypass, xshift=-5.5cm] (albedo) {};
     \fill[red!70] ($(albedo.south west)+(0.2,0.2)$) rectangle ($(albedo.center)-(0.1,0.1)$);
     \fill[green!70] ($(albedo.center)+(0.1,0.1)$) rectangle ($(albedo.north east)-(0.2,0.2)$);
-    % Distinct node for label so we can fit it later
     \node[label text, below=0.1cm of albedo] (lbl_albedo) {Target 0\\Albedo (RGB)};
-
     % 2. Normals
     \node[screen, right=0.5cm of albedo] (normals) {};
     \shade[left color=blue!80!black, right color=cyan!60!white] ($(normals.south west)+(0.1,0.1)$) rectangle ($(normals.north east)-(0.1,0.1)$);
     \node[label text, below=0.1cm of normals] (lbl_normals) {Target 1\\Normals (XYZ)};
-
     % 3. Depth
     \node[screen, right=0.5cm of normals] (depth) {};
     \shade[top color=white, bottom color=black!90] ($(depth.south west)+(0.1,0.1)$) rectangle ($(depth.north east)-(0.1,0.1)$);
     \node[label text, below=0.1cm of depth] (lbl_depth) {Depth\\Buffer (Z)};
-
     % 4. Material
     \node[screen, right=0.5cm of depth] (material) {};
     \fill[gray!30] ($(material.south west)+(0.1,0.1)$) rectangle ($(material.north)-(0.1,0)$);
     \fill[gray!80] ($(material.south)-(0.1,0)$) rectangle ($(material.north east)-(0.1,0.1)$);
     \node[label text, below=0.1cm of material] (lbl_material) {Target 2\\Rough/Metal};
-
     % --- GROUPING BOX ---
     \node[draw, dashed, inner sep=0.4cm, fit=(albedo)(lbl_albedo)(material)(lbl_material), label=below:\textbf{The G-Buffer Collection}] (gbuffergroup) {};
-
     % --- ARROWS ---
     \draw[arrow] (geometrypass.south) -- ++(0,-0.8) -| (albedo.north);
     \draw[arrow] (geometrypass.south) -- ++(0,-0.8) -| (normals.north);
@@ -432,35 +419,16 @@ scenarios and for integration with hybrid ray tracing techniques.
 
 \daesection{GPU Parallelism and Pipeline Cost Factors}
 
-These execution characteristics apply to both rasterization and ray tracing workloads.
-However, ray tracing typically exhibits less coherent control flow and more irregular memory access patterns,
-making divergence and bandwidth pressure dominant performance factors. The following sections introduce
-hardware-accelerated ray tracing and the hybrid strategies used to control these costs under real-time frame
-budgets.
+Modern GPUs exploit massive data parallelism by executing thread in lockstep groups, known as warp or wavefronts.
+While fixed-function stages like rasterization are highly optimized and throughput-oriented, programmable stages such as ray generation and intersection shaders
+are highly sensitive to divergence. In ray tracing, when secondary rays bounce in different direction (e.g., on rough specular surfaces), thread within the same warp take different
+execution paths and access disparate memory locations. This incoherent control flow and irregular memory access pattren drastically reduce effective throughput and place an immense 
+bottleneck on memory bandwidth.\cite{akenine2018realtimerendering}
 
-\subsection{Parallel Execution Model}
-\begin{itemize}
-  \item GPUs exploit massive data parallelism by executing many threads in lockstep groups (warps/wavefronts).
-  \item Divergence within a group reduces effective throughput, which is particularly relevant for ray traversal and shading.
-\end{itemize}
+To mitigate these architectural bottlenecks under strict real-time frame budgets, modern render engines leverage asynchronous compute.
+By overlapping ray tracing and compute workloads (e.g.,denoising or BVH updates), with traditional graphics passes, developers can partially hide
+the latency of these bandwidth-heavy operations, provided that shared resources and synchronization requirements allow for it.
 
-\subsection{Fixed-Function vs Programmable Work}
-\begin{itemize}
-  \item Fixed-function stages (rasterization, interpolation, depth/stencil) are highly optimized and throughput-oriented.
-  \item Programmable stages (fragment/compute/ray shaders) are flexible but more sensitive to divergence and memory behavior.
-\end{itemize}
-
-\subsection{Memory Hierarchy and Bandwidth}
-\begin{itemize}
-  \item Performance is often bounded by memory bandwidth when writing/reading large render targets (e.g., G-buffers).
-  \item Cache behavior and access coherence strongly affect ray tracing workloads, especially with incoherent secondary rays.
-\end{itemize}
-
-\subsection{Asynchronous Compute and Overlap}
-\begin{itemize}
-  \item Modern GPUs can overlap compute with graphics when dependencies allow, enabling partial hiding of denoising or BVH updates.
-  \item Overlap is limited by shared resources (memory bandwidth, caches, execution units) and synchronization requirements.
-\end{itemize}
 
 \cite{akenine2018realtimerendering}
 \daesection{Ray Tracing \& Hybrid Strategies}
@@ -476,7 +444,7 @@ A ray is commonly represented as a parametric half-line
 \[
 P(t) = O + tD,\quad t \ge 0
 \]
-where \(O\) denotes the ray origin and \(D\) its direction. In practice, rays
+where \(O\) denotes the ray origin and \(D\) its direction.\cite{shirley2024raytracing} In practice, rays
 are traced over finite segments defined by application-specific minimum and
 maximum distances.
 
@@ -488,12 +456,12 @@ intersection point. To limit computational cost, recursive ray spawning is
 bounded by a maximum bounce depth.
 
 Several ray tracing variants are commonly distinguished in the literature.
-Whitted-style ray tracing assumes ideal specular surfaces and traces a limited
-set of reflection, refraction, and shadow rays. Stochastic ray tracing
-introduces probabilistic sampling to support effects such as glossy reflections
-and soft shadows. Path tracing generalizes this approach by stochastically
-sampling the full light transport equation, enabling physically based global
-illumination at the cost of increased noise and computational expense.
+As surveyed by\cite{qu2023raytracing},these methods fundamentally dive into forward and backward raytracing.Because forward tracing (simulating rays from light sources to the camera)
+is highly inefficient for image synthesis, modern real-time applications rely on backward ray tracing.
+Early backward methods like Whitted-style ray tracing assumed ideal specular surfaces and traced a limited set of reflection,
+refraction, and shadow rays. Stochastic ray tracing introduces probabilistic sampling to support effects such as glossy reflections and soft shadows.
+Path tracing generalizes this approach by stochastically sampling the full light transport equation, enabling physically based global illumination.\cite{pharr2023pbr}
+However,solving this equation at the extremely low sample counts required for real-time rendering introduces massive variance in the form of high-frequency stochastic noise\cite{wester2020}
 
 To limit computational cost, ray intersection is accelerated using Bounding Volume Hierarchies (BVH).
 As described by Galvan, these structures partition scene geometry into a tree of axis-aligned bounding boxes (AABBs),
@@ -504,15 +472,13 @@ In real-time applications, fully converged path tracing is generally
 impractical under fixed frame-time budgets. Consequently, modern engines employ
 hybrid ray tracing pipelines in which rasterization determines primary
 visibility, while ray tracing is selectively applied to specific effects such
-as shadows and reflections.
-\cite{haines2019raytracinggems}
+as shadows and reflections.\cite{haines2019raytracinggems}
 \subsection{Vulkan raytracing VS DXR}%raytracing gems 1 chap3 and raytracing gems2 chap 16
-
 Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware-accelerated ray tracing through a common conceptual model consisting of acceleration structures, programmable ray tracing shaders, and shader binding tables.
 As described in Ray Tracing Gems, both APIs ultimately target the same fixed-function traversal hardware on modern GPUs and differ primarily in their API design philosophy rather than their underlying execution model.\\
 
-DXR is implemented as an extension to DirectX~12 and is designed to integrate ray tracing into an existing graphics pipeline.
-It provides higher-level abstractions for ray tracing pipelines, shader binding, and acceleration structure management, prioritizing ease of integration and reduced boilerplate for applications already built on DirectX~12.
+DXR is implemented as an extension to DirectX~12 and is designed to integrate ray tracing into an existing graphics pipeline\cite{luna2016dx12}.
+It provides higher-level abstractions for ray tracing pipelines, shader binding, and acceleration structure management, prioritizing ease of integration and reduced boilerplate for applications already built on DirectX~12\cite{marrs2021raytracinggems2}.
 Many resource management and synchronization details are handled implicitly by the API.\\
 
 In contrast, Vulkan Ray Tracing follows Vulkan’s explicit control philosophy.
@@ -523,7 +489,7 @@ This design favors predictability and fine-grained control, making Vulkan Ray Tr
 Despite these API-level differences, both Vulkan Ray Tracing and DXR provide access to the same ray tracing shader stages, including ray generation, miss, closest-hit, any-hit, and intersection shaders.
 Ray Tracing Gems emphasizes that performance differences between the two APIs are generally attributable to application-level design choices rather than fundamental differences in the hardware ray tracing pipeline.
 \par
-%ray tracing gems 2
+
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
@@ -589,9 +555,7 @@ Ray Tracing Gems emphasizes that performance differences between the two APIs ar
 Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware-accelerated ray traversal through similar conceptual models,
 including acceleration structures, ray tracing shader stages, and shader binding tables. Prior work (e.g., Ray Tracing Gems) emphasizes that performance characteristics 
 are primarily driven by ray count, coherence, and traversal complexity rather than API choice.
-
-Consequently, this study focuses on Vulkan as a representative modern ray tracing API, with results expected to generalize to DXR-based pipelines under comparable workloads.
-\cite{haines2019raytracinggems,marrs2021raytracinggems2, khronos_vulkan_guide_rt, nvidia_dxr_intro}
+Consequently, this study focuses on Vulkan as a representative modern ray tracing API, with results expected to generalize to DXR-based pipelines under comparable workloads\cite{haines2019raytracinggems, khronos_vulkan_guide_rt, nvidia_dxr_intro}.
 
 \subsection{Spatiotemporal Reconstruction for Low-Sample Ray Tracing}
 
@@ -622,15 +586,14 @@ over-blurred specular reflections when indirect lighting is undersampled,
 temporal lag under fast motion, and incompatibility with stochastic 
 primary ray effects.
 
-SVGF is used in this study as a reference denoiser due to its algorithmic transparency, ease of integration, and prevalence in academic literature, enabling controlled comparison with newer production denoisers.
-\cite{schied2017svgf}
-\subsection{Production Denoisers: NRD}
+SVGF is used in this study as a reference denoiser due to its algorithmic transparency, ease of integration, and prevalence in academic literature, enabling controlled comparison with newer production denoisers.\cite{schied2017svgf}
 
+\subsection{Production Denoisers: NRD}
 Building on the foundations established by SVGF, NVIDIA Real-Time Denoisers (NRD) 
 represents the current state of production-quality reconstruction for hybrid ray 
 tracing pipelines. NRD is a spatio-temporal, API-agnostic library designed 
 specifically for signals at 0.5--1 rays per pixel, and has been deployed in 
-commercial titles including Watch Dogs: Legion, Dying Light 2, and Cyberpunk 2077.
+commercial titles including Watch Dogs: Legion, Dying Light 2, and Cyberpunk 2077\cite{nvidia_NRD_blog}.
 
 NRD provides two primary denoiser variants:
 \begin{itemize}
@@ -642,17 +605,21 @@ NRD provides two primary denoiser variants:
 \end{itemize}
 
 Unlike SVGF's unified approach, NRD processes diffuse and specular components 
-separately, allowing signal-specific tuning. Both variants require de-modulated 
+separately, allowing signal-specific tuning. Both variants require demodulated 
 irradiance input (albedo factored out) and standard G-buffer attributes. 
-Performance at 1440p on RTX 4080 hardware is reported at 2.25~ms for 
+Performance at 1440p on RTX 4080 hardware is reported at 2.55~ms for 
 ReBLUR\_DIFFUSE\_SPECULAR in default mode, representing approximately 50\% 
-improvement over equivalent SVGF configurations.\cite{nvidia_NRD_blog}
+improvement over equivalent SVGF configurations\cite{nvidia_nrd_github}.
 
-NRD's API-agnostic design supports DX11, DX12, and Vulkan through precompiled 
-DXBC, DXIL, and SPIR-V shaders respectively, making it suitable for cross-API 
-performance comparisons in this study.
+NRD's API-agnostic design supports DX11, DX12, and Vulkan through pre-compiled 
+DXBC, DXIL, and SPIR-V shaders respectively. While NRD represents the current production standard for commercial titles,
+its complex API requirements and pre-compiled shader integration place it outside the scope of this research project. Therefore, this experiment focuses on using SVGF as its algorithmic baseline to clearly measure the performance impact.
+
+This leaves an open question that this thesis addresses directly: given a simpler,
+fully transparent denoising baseline like SVGF rather than a production black-box like NRD,
+how much perceptual quality per millisecond of ray tracing overhead can a hybrid pipeline actually recover---and where does that budget best go, shadows or reflections?
+
 \subsection{Hybrid Rendering Strategies}
-
 To manage ray tracing cost under fixed frame-time budgets, modern renderers
 apply ray tracing selectively and combine it with rasterized buffers and
 screen-space methods. This thesis evaluates the following strategy families:
@@ -661,8 +628,6 @@ screen-space methods. This thesis evaluates the following strategy families:
     \item \textbf{G-buffer-guided tracing:} Uses rasterized geometry buffers to selectively dispatch rays only where needed (e.g., glossy surfaces).
     \item \textbf{Screen-space first, fallback:} SSR/SSAO when RT reflection and RTAO are turned off.
 \end{itemize}
-
-
 
 \subsection{Perceptual Quality Metrics}
 Hybrid ray tracing quality is evaluated against a path-traced reference.
@@ -675,45 +640,33 @@ differences in shadows and specular reflections.
     \item \textbf{LPIPS:} Learned Perceptual Image Patch Similarity. Uses deep neural networks trained on human perceptual judgments.
     \item \textbf{SSIM:} Structural Similarity Index. Measures structural information preservation.
 \end{itemize}
+
 \subsection{Cost Characteristics of Ray-Traced Shadows and Reflections}
-The performance cost of ray tracing depends strongly on ray count, ray
-coherence, and scene traversal complexity. Shadow rays are typically short,
-single-bounce queries with a clear termination criterion (visibility to a light),
-making their cost primarily driven by light count, shadow distance, and BVH
-occlusion complexity. In hybrid pipelines, shadow denoising is often less
-expensive than reflection denoising due to lower signal variance and fewer
-high-frequency view-dependent features.
+The performance cost of ray tracing depends strongly on ray count, ray coherence, and scene traversal complexity.
+Shadow rays are typically short, single-bounce queries with a clear termination criterion (visibility to a light),
+making their cost primarily driven by light count, shadow distance, and BVH occlusion complexity. In hybrid pipelines,
+shadow denoising is often less expensive than reflection denoising due to lower signal variance and fewer high-frequency view-dependent features.
 
-Shadow rays are typically short, single-bounce queries. However, full-resolution ray-traced
-shadows can be prohibitively expensive; Anagnostou demonstrates that naively ray tracing shadows for a full frame can cost upwards of 92~ms,
-whereas a hybrid approach using edge-focused tracing and reconstruction can reduce this to ~15~ms \cite{anagnostou2021}.
-This immense disparity necessitates the use of hybrid filtering techniques.
+However, generating realistic soft shadows requires distributing multiple rays across an area light to accurately sample the penumbra\cite{hamza2024, xie2007softshadows}.
+At low sample counts, this introduces severe Monte Carlo noise \cite{wester2020}.
+Furthermore, full-resolution ray-traced shadows can be prohibitively expensive; Anagnostou demonstrates that naively ray tracing shadows for a full frame can cost upwards of 92~ms,
+whereas a hybrid approach using edge-focused tracing and reconstruction can reduce this to 15~ms \cite{anagnostou2021}. To mitigate this immense disparity without tracing full screens,
+early hybrid approaches like those proposed by Lauterbach et al.\ \cite{lauterbach2009} introduced selective ray tracing,
+utilizing rasterization for the umbra and fully lit areas, and only dispatching rays for potentially incorrect pixels at shadow boundaries.
 
-Ray-traced reflections are generally more expensive because reflection rays are
-often less coherent (especially on rough surfaces), may require longer
-traversals, and produce high-variance specular signals that demand stronger
-spatiotemporal reconstruction. Reflection cost is therefore influenced by
-material roughness distribution, view-dependent ray directions, and the
-percentage of pixels that require fallback beyond screen space. These
-differences motivate evaluating shadows and reflections separately and in
-combination when budgeting ray tracing time.
-\cite{akenine2018realtimerendering, haines2019raytracinggems, schied2017svgf}
+Ray-traced reflections are generally more expensive because reflection rays are often less coherent (especially on rough surfaces), may require longer traversals,
+and produce high-variance specular signals that demand stronger spatiotemporal reconstruction. Reflection cost is therefore influenced by material roughness distribution,
+view-dependent ray directions, and the percentage of pixels that require fallback beyond screen space. These differences motivate evaluating shadows and reflections separately and in combination when budgeting ray tracing time\cite{akenine2018realtimerendering, haines2019raytracinggems}.
 
 \subsection{Limitations of Traditional Image Quality Metrics}
-Traditional image quality metrics such as MSE and PSNR operate on per-pixel
-differences and assume that small spatial shifts or changes in texture detail
-are perceptually minor. In hybrid ray tracing pipelines, however, denoisers can
-introduce structured artifacts such as temporal ghosting, specular smearing,
-and loss of high-frequency detail that may be visually objectionable despite
-low pixel-wise error. Conversely, stochastic noise may produce large pixel-wise
-error while remaining less perceptually disruptive once temporally filtered.
+Traditional image quality metrics such as MSE and PSNR operate on per-pixel differences and assume that small spatial shifts or changes in texture detail are perceptually minor. In hybrid ray tracing pipelines,
+however, denoisers can introduce structured artifacts such as temporal ghosting, specular smearing, and loss of high-frequency detail that may be visually objectionable despite low pixel-wise error.
+Conversely, stochastic noise may produce large pixel-wise error while remaining less perceptually disruptive once temporally filtered.
 
-Because the goal of this thesis is to quantify perceptual improvement per
-millisecond of ray tracing overhead, evaluation requires metrics that better
-correlate with human judgments of image similarity. This motivates the use of
-SSIM for structural preservation and LPIPS for perceptual differences that
-arise from denoising and view-dependent specular effects.
-\cite{zhang2018lpips, schied2017svgf}
+Because the goal of this thesis is to quantify perceptual improvement per millisecond of ray tracing overhead, evaluation requires metrics that better correlate with human judgments of image similarity.
+This motivates the use of SSIM for structural preservation and LPIPS for perceptual differences that arise from denoising and view-dependent specular effects\cite{zhang2018lpips, schied2017svgf}.
+This methodology aligns with recent industry evaluations, such as the comparative analysis of RTAO and GTAO \cite{waldner2021rtao},
+which successfully relied on SSIM to quantify the visual noise introduced by hardware-accelerated ray tracing under strict millisecond budgets.
 
 \daesection{Motivation for Hybrid Ray Tracing}
 Hybrid rendering pipelines arise from a practical mismatch between the visual
@@ -749,391 +702,416 @@ theoretically equivalent API model to contextualize the results.
 
 \daesection{Research Questions \& Hypotheses}
 \textbf{Research Questions:}
+To evaluate the viability of hybrid rendering pipelines under strict real-time constraints, this research addresses the following primary questions:
 \begin{enumerate}
-    \item What are the individual and combined performance costs of ray-traced shadows and reflections?
-    \item How do these costs scale with resolution and scene complexity?
-    \item Which hybrid strategies offer the best quality-per-millisecond ratio?
-    \item How do ray-traced shadows and reflections differ in quality-per-millisecond across hybrid strategies under fixed frame budgets?
+    \item What is the performance overhead of integrating ray-traced effects (Shadows, Reflections, and Ambient Occlusion) into a deferred pipeline, and how is this cost distributed across individual GPU passes?
+    \item How do computational costs and perceptual quality metrics (such as LPIPS) scale across different ray budgets (1, 8, 16, and 32 Samples Per Pixel)?
+    \item How does integrating spatiotemporal denoising (SVGF) post-lighting compare to a traditional pre-lighting integration in terms of overall frame time and architectural efficiency?
 \end{enumerate}
 
-
+\vspace{1em}
 
 \textbf{Hypotheses:}
+
+Based on the theoretical framework and industry benchmarks, the following hypotheses are proposed:
 \begin{itemize}
-    \item \textbf{H1 (Performance):} Shadows ~2ms, Reflections 4-6ms. Combined cost is not strictly additive. Costs scale super-linearly with resolution and complexity.
-    \item \textbf{H2 (Strategy):} G-buffer-guided tracing is predicted to provide the best quality-cost ratio.
-    \item \textbf{H3 (Complexity):} Reflection costs scale logarithmically with BVH depth; Shadow costs scale linearly with light count.
+    \item \textbf{H1 (Performance Scaling \& Diminishing Returns):} The computational cost of hybrid ray tracing will scale sub-linearly with the sample count due to the fixed overhead of spatiotemporal denoising.
+     Consequently, a 1~SPP ray budget combined with SVGF will yield the optimal perceptual quality-per-millisecond ratio, with higher sample counts (8, 16, and 32~SPP) exhibiting steep diminishing returns.
+    \item \textbf{H2 (Architectural Efficiency):} A unified Post-Lighting SVGF architecture will significantly reduce total GPU frame time compared to a Pre-Lighting architecture by eliminating redundant secondary G-buffer rendering passes,
+     all while maintaining equivalent perceptual visual fidelity.
 \end{itemize}
 
 
 \daesection{Methodology}
 
+\subsection{Test Environment and Hardware}
+To provide accurate and reproducible profiling data, all performance metrics and frame timings were captured on a consistent hardware test bench. The evaluation was conducted on a system equipped with an AMD Ryzen 9 9900X CPU, 64GB of RAM, and an AMD RX 9070 XT GPU. This configuration represents a modern high-performance target,
+ensuring the millisecond timings reflect realistic consumer hardware constraints. All tests were rendered at a fixed internal resolution of $1920 \times 1080$.
+
 \subsection{Test Scenes}
-\textbf{Indoor Scene:} Sponza\\
-\textbf{Specular Scene:} Metal-Spheres\\
-
-\subsection{Variables}
-\begin{gbox}
-\begin{tabularx}{\textwidth}{l X}
-\textbf{Variable} & \textbf{Values} \\
-Resolution & 1080p\\
-Features & None, Shadows, Reflections, Both \\
-SPP & 1, 2, 4, 8 \\
-Denoiser & SVGF \\
-Strategy & Full-screen, G-buffer guided, SSR fallback \\
-\end{tabularx}
-\end{gbox}
-
-\subsection{Instrumentation}
-\begin{gbox}
-GPU timestamps collected for Rasterization, Shadow RT, Reflection RT, Denoising, and Post-processing. 120 frames recorded, middle 60 analyzed.
-\end{gbox}
-
-\subsection{Denoising Configurations}
-
-We evaluate four denoising strategies at each sampling rate:
-
+The evaluation utilizes two distinct scenes to stress-test different ray tracing characteristics:
 \begin{itemize}
-    \item \textbf{None:} Raw ray-traced output without filtering.
-    \item \textbf{Temporal accumulation:} Exponential moving average 
-          with motion-vector reprojection ($\alpha = 0.2$).
-    \item \textbf{SVGF-like:} Temporal accumulation combined with a 
-          5-level à-trous wavelet filter using variance-guided 
-          edge-stopping functions, following Schied et al.
-    \item \textbf{NRD:} NVIDIA Real-Time Denoisers, representing 
-          current production-quality reconstruction.
+    \item \textbf{Indoor Scene (Sponza):} Selected to rigorously test complex shadow occlusion, contact hardening, and the high-frequency variance inherent to indirect lighting in a geometrically complex space.
+    \item \textbf{Specular Scene (Metal-Spheres):} Selected specifically to evaluate the performance and denoising stability of ray-traced reflections on high-frequency glossy and mirrored surfaces.
 \end{itemize}
 
-The SVGF-like configuration serves as a baseline for understanding 
-the quality-cost tradeoff of classical spatiotemporal filtering 
-against more recent ML-influenced approaches.
+\subsection{Independent and Dependent Variables}
+The experiment measures dependent performance and quality variables across a matrix of independent configurations.
 
+\textbf{Independent Variables:}
+\begin{itemize}
+    \item \textbf{Rendering Architecture:} Rasterization Baseline, SVGF Pre-Lighting, SVGF Post-Lighting, and RT No Denoiser (Raw).
+    \item \textbf{Active Features:} Tested independently (Shadows only, Reflections only, Ambient Occlusion only) and concurrently (Full Pipeline).
+    \item \textbf{Samples Per Pixel (SPP):} 1, 8, 16, and 32 SPP to measure the scaling of GPU cost versus noise reduction.
+\end{itemize}
 
+\textbf{Dependent Variables:}
+\begin{itemize}
+    \item \textbf{Performance:} Total GPU time (ms) and individual GPU pass timings (e.g., Geometry, Ray Traversal, Spatial Filtering, Temporal Accumulation).
+    \item \textbf{Perceptual Quality:} Learned Perceptual Image Patch Similarity (LPIPS), alongside traditional metrics (SSIM, PSNR), calculated against a 1000 SPP ground truth.
+\end{itemize}
+
+\subsection{Instrumentation and Profiling}
+Performance data was gathered using hardware timestamp queries injected directly into the Vulkan command buffers. Timestamps were isolated for every individual stage of the pipeline to allow for granular pass breakdown analysis. 
+
+To eliminate temporal outliers and ensure steady-state measurements, an automated testing framework was utilized. For each variable configuration, 120 consecutive frames were recorded after the engine completed its initial warm-up phase.
+The middle 60 frames were extracted, averaged, and exported to a master CSV file for evaluation.
+
+\subsection{Pipeline Configurations}
+To isolate the performance overhead and visual impact of both the ray-traced features and the reconstruction algorithms, the renderer was evaluated under four distinct pipeline configurations:
+
+\begin{itemize}
+    \item \textbf{Rasterization Baseline:} A traditional deferred pipeline utilizing Screen-Space Ambient Occlusion (SSAO), Screen-Space Reflections (SSR), and rasterized shadow mapping.
+    \item \textbf{RT No Denoiser (Raw Baseline):} Ray-traced features evaluated without any spatial or temporal filtering, serving as a baseline to visualize raw Monte Carlo variance.
+    \item \textbf{SVGF Pre-Lighting:} Ray-traced signals are denoised before the deferred lighting pass. This requires secondary data generation passes to store the denoised signals before material evaluation.
+    \item \textbf{SVGF Post-Lighting:} The proposed optimized architecture where ray-traced signals and deferred lighting are evaluated simultaneously, with SVGF operating on the fully lit output.
+\end{itemize}
 \daechapter{Implementation}
 
 \daesection{Rasterization Baseline and Deferred Rendering}
-This section describes the rasterization-based foundation of the renderer and its role within the hybrid ray tracing pipeline.
-Rasterization is used to determine primary visibility and to generate the screen-space buffers required for deferred lighting, ray generation, and spatiotemporal reconstruction.
+This secontion describes the rasterization-based foundation of the renderer and its critical role within the hybrid ray-tracing pipeline.
+Traditional rasterization is utilized to determine primary visibility and to generate the screen-space buffers (G-buffer) required for deferred lighting,ray generation and spatiotemporal reconstruction.
+This rasterization baseline server as the strict reference configuration against which all ray-traced features are incrementally evaluated.%this iosnt 100% correct since we are evaluting against the 1000spp image for the psnr ssim and lpips
 
-This rasterization baseline serves as the reference configuration against which all ray-traced features are incrementally evaluated in the performance analysis.
 \subsection{Fragment Shading in the Rasterization Pass}
-During rasterization, scene geometry is processed through a traditional vertex and fragment shading pipeline. The vertex stage transforms mesh vertices into clip space using the current view and projection matrices,
-while the fragment stage evaluates material properties and outputs per-pixel attributes to multiple render targets.
+During the initial rasterization phase, scene geometry is processed through a traditional pipline utilizing dedicated vertex and fragment shaders (\textbf{geometry.vert} and \textbf{geometry.frag}). 
+The vertex stage transforms mesh vertices into clip space using the current view and projection matrices, while the fragment stage evaluates material properties and outputs per-pixel attributes to multiple render targets.
 
-Rather than producing a fully shaded image, fragment shading in this pass focuses on exporting material and geometric data required for later stages.
-These outputs include surface albedo, surface normals, material parameters such as roughness and metallicity, and motion vectors. By deferring lighting calculations to a later stage,
-the rasterization pass remains efficient and independent of the number of light sources.
+Rather than producing a fully shaded forward image, fragment shading in this pass focuses exclusivly on eporting the material and geomtric data required for later stages. These outputs include, surface albedo, normals, packed material parameter(roughness and metallicity),
+and motion vectors.by deferring lighting calculations to the subssequent \textbf{DefferedLightingPass.cpp}, the initial rasterization pass remains highly efficient and entirely independent of the number of active light sources in the scene. Furthermore,
+this pass provides high-precision motion vectors and depth information, which are mathematically essential for temporal reprojection in both Temporal Anti-Aliasing (\textbf{TAAPass.cpp}) and SVGF-based denoising.
 
-Rasterization also provides high-quality motion vectors and depth information, which are essential for temporal reprojection in both temporal anti-aliasing (TAA) and SVGF-based denoising.
 \subsection{Deferred Rendering Architecture}
-The renderer employs a deferred rendering architecture consisting of a depth pre-pass, a geometry pass, and a screen-space lighting pass. In the depth pre-pass, scene geometry is rasterized without shading to populate the depth buffer.
-This ensures that subsequent passes operate only on visible fragments and reduces overdraw.
+The custom Vulkan renderer employs a strict deferred rendering architecture governed by a modular render graph (\textbf{RenderGraph.cpp}).
+The baseline pipeline consists of a depth pre-pass (\textbf{DepthPrePass.cpp}), a geometry pass (\textbf{GeometryPass.cpp}), and a screen-space deferred lighting pass.
+In the depth pre-pass, scene geometry is rasterized utilizing \textbf{depth.vert} and \textbf{depth.frag} without shading overhead to heavily reduce overdraw for subsequent stages.
 
-The geometry pass writes per-pixel data to the G-buffer, decoupling geometry processing from lighting evaluation. This structure allows lighting cost to scale primarily with screen resolution rather than scene complexity,
-which is particularly important when combining rasterization with ray tracing.
-
-Deferred rendering also serves as the backbone of the hybrid pipeline: the G-buffer generated during rasterization is reused to guide ray tracing, provide surface properties for shading ray hits, and supply edge-stopping information for denoising filters.
-
-The renderer also maintains an unjittered depth buffer: the jittered depth aligns with subpixel sampling for TAA, while the unjittered depth provides stable geometric references for reprojection and history rejection.
-
+The geometry pass writes per-pixel data to the G-buffer, successfully decoupling geometry processing from the lighting evaluation. This structural decoupling is the backbone of the hybrid pipeline:
+the G-buffer generated during rasterization is aggressively reused to guide ray-tracing origins, provide surface properties for shading ray hits, and supply the critical edge-stopping variance data needed for the SVGF filters.
 Because geometry processing and lighting are decoupled, the cost of additional ray-traced effects can be isolated to specific passes without affecting the rasterization workload.
-\subsection{G-buffer Layout and Data Encoding}
-The G-buffer stores a set of screen-space textures encoding per-fragment attributes. In this implementation, the G-buffer contains surface albedo, world-space or view-space normals,
-depth, and packed material properties such as roughness and metallicity. Surface position is reconstructed from depth and camera matrices rather than stored explicitly, reducing memory bandwidth requirements.
 
-In addition to material attributes, the renderer outputs per-pixel motion vectors derived from current and previous frame transformations. These motion vectors are used for temporal reprojection in TAA and SVGF,
-enabling stable accumulation of low-sample ray-traced signals.
+\subsection{The Lighting Pass and Baseline Features}
+Lighting is evaluated in a full-screen compute pass (\textbf{lighting.frag}) that operates entirely in screen space.
+For each pixel, surface properties are reconstructed from the G-buffer and combined with lighting data to compute the final shaded color.
 
-The chosen G-buffer layout balances precision and bandwidth usage, providing sufficient information for lighting, ray tracing, and reconstruction without excessive memory overhead.
+To establish a baseline for performance comparisons, the engine implements traditional screen-space equivalents for all advanced lighting features.
+When ray tracing is disabled, the renderer natively falls back to Screen-Space Ambient Occlusion (\textbf{SSAOPass.cpp}), Screen-Space Reflections (\textbf{SSRPass.cpp}),
+and traditional rasterized shadow mapping (\textbf{ShadowPass.cpp} and \textbf{PointShadowPass.cpp}). This centralized design allows for a direct, 1:1 comparison between screen-space fallbacks and ray-traced techniques under identical lighting conditions.
 
-This design enables direct comparison between rasterized and ray-traced techniques under identical primary visibility and material conditions, ensuring that measured performance differences arise primarily from ray traversal and denoising overhead.
-\subsection{Lighting Pass}
-Lighting is evaluated in a full-screen pass that operates entirely in screen space. For each pixel, surface properties are reconstructed from the G-buffer and combined with lighting information to compute the final shaded color.
+\subsection{Hybrid Ray Tracing Integration}
+Hybrid ray tracing is integrated into the renderer as a set of highly modular compute passes that augment the rasterization-based lighting.
+Ray tracing is applied selectively to ambient occlusion, shadows, and reflections, while rasterization remains strictly responsible for primary visibility and material evaluation.
 
-When ray tracing features are enabled, ray-traced shadow masks and reflection buffers are sampled during the lighting pass and integrated into the lighting equation. When ray tracing is disabled for a given feature,
-screen-space alternatives such as shadow maps or screen-space reflections (SSR) are used instead. This design allows direct comparison between rasterized and ray-traced techniques under identical lighting conditions.
+\daesection{ G-buffer–Guided vs. Unguided Ray Generation}
+A core architectural feature of this engine is the implementation of both G-buffer-guided and unguided ray generation strategies for comparative analysis.
 
-By centralizing lighting in a single pass, the renderer cleanly integrates rasterized and ray-traced inputs while maintaining a consistent shading model across configurations.
-\daesection{Hybrid Ray Tracing Integration}
-Hybrid ray tracing is integrated into the renderer as a set of optional passes that augment rasterization-based lighting.
-Ray tracing is applied selectively to shadows and reflections, while rasterization remains responsible for primary visibility and material evaluation.
-\begin{lstlisting}[language=C++, caption={Simplified command recording loop showing the hybrid execution flow.}, label={lst:render-loop}]
-// 1. Standard Rasterization Pre-passes
-depthPassUnjittered->Execute(renderContext); // For stable reprojection
-depthPass->Execute(renderContext);           // Main depth
+In the guided approach (\textbf{RTAOPass.cpp}, \textbf{RTRPass.cpp}, and \textbf{RTShadowPass.cpp}), ray generation is explicitly guided by the G-buffer to ensure that rays are only spawned for definitively visible pixels.
+Rays originate from surfaces identified during the rasterization pass, utilizing the reconstructed world-space positions and surface normals.
+This strategy drastically improves Bounding Volume Hierarchy (BVH) traversal coherence and heavily reduces unnecessary ray workloads compared to blind, object-space ray dispatching.
 
-// 2. Hybrid Conditional Logic
-if (registry.useRTShadows()) {
-    // Ray Traced Path: Trace -> Denoise (SVGF)
-    rtShadowPass->Execute(renderContext);
-    svgfShadow->Execute(renderContext);
-} else {
-    // Fallback: Standard Raster Shadow Maps
-    shadowPass->Execute(renderContext);
-}
-
-// 3. Deferred G-Buffer Generation
-geometryPass->Execute(renderContext);
-
-// 4. Ray Traced Reflections & AO
-if (registry.hasAnyRTFeature()) {
-    // Explicit Barrier: Transition G-Buffer for Read Access in Compute/RT shaders
-    Utils::transitionImageLayoutCustom(gNormal, ..., VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, ...);
-    
-    if (registry.useRTReflections()) {
-        rtReflectionPass->Execute(renderContext);
-        svgfReflection->Execute(renderContext); // Denoise immediately
-    }
-}
-
-// 5. Screen-Space Fallbacks (if RT is off)
-if (!registry.useRTReflections()) {
-    ssrPass->Execute(renderContext);
-}
-
-// 6. Final Composition
-lightingPass->Execute(renderContext);   // Combine all buffers
-taaPass->Execute(renderContext);        // Temporal Anti-Aliasing
-toneMappingPass->Execute(renderContext);
-\end{lstlisting}
-\subsection{G-buffer–Guided Ray Generation}
-Ray generation is guided by the G-buffer to ensure that rays are only spawned for visible pixels. Rays originate from surfaces identified during rasterization, using reconstructed world-space positions and surface normals.
-\begin{lstlisting}[language=C++, caption={HLSL Ray Generation shader implementing G-Buffer depth culling.}, label={lst:depth-culling}]
-uint2 pixelCoords = DispatchRaysIndex().xy;
-float2 uv = (float2(pixelCoords) + 0.5) / float2(DispatchRaysDimensions().xy);
-
-// Load depth from the rasterized G-Buffer
-float depth = gDepth.Load(int3(pixelCoords, 0));
-
-// Optimization: Early exit if pixel is background (skybox)
-if (depth >= 0.99999 || depth <= 0.0) {
-    // Write "lit" (1.0) to masks and return immediately
-    shadowMask[pixelCoords] = 1.0;
-    pointShadowMask[pixelCoords] = float4(1, 1, 1, 1);
-    return;
-}
-
-// If depth is valid, proceed to load Normals and TraceRay...
-\end{lstlisting}
-
-This approach avoids tracing rays for occluded geometry and ensures that ray tracing cost scales with screen resolution rather than scene complexity.
-Because ray origins and directions are derived from coherent screen-space data, this strategy improves traversal coherence compared to object-space ray dispatch and reduces unnecessary ray workload.
+Conversely, the engine also implements unguided variants (\textbf{RTUnguidedAOPass.cpp}, \textbf{RTUnguidedRTRPass.cpp}, and \textbf{RTUnguidedShadowPass.cpp}) to actively profile the performance overhead and architectural benefits of the guided visibility approach.
 \subsection{Ray-Traced Shadows}
-Ray-traced shadows are implemented by casting shadow rays from visible surface points toward light sources. For directional lights, rays are traced along the light direction, while point lights emit rays toward the light position with a finite maximum distance.
+Ray-traced shadows are implemented by casting shadow rays from visible surface points directly toward light sources (\textbf{RTShadow.rgen} and \textbf{RTShadow.rchit}).
 
-Each shadow ray performs a single traversal of the acceleration structure and terminates upon the first intersection. The result is a binary visibility signal indicating whether the surface point is shadowed.
-This signal is written to a screen-space buffer and later consumed by the lighting pass.
-
-Because shadow rays are short and single-bounce, they exhibit relatively low variance compared to other ray-traced effects. Nevertheless, temporal accumulation and SVGF filtering are applied to stabilize the signal under low sampling rates.
+Each shadow ray performs a single traversal of the acceleration structure (\textbf{AccelerationStructure.cpp}) and terminates immediately upon the first intersection. The result is a binary visibility signal indicating whether the surface point is occluded.\
+While shadow rays are short and single-bounce—exhibiting relatively low initial variance—temporal accumulation and spatial filtering are heavily applied to stabilize the soft-shadow penumbras under strict 1 SPP budgets.
 \newpage
-\subsection{Ray-Traced Reflections}
-Ray-traced reflections are generated by emitting reflection rays from visible surface points based on the view direction and surface normal. Reflection rays may traverse larger portions of the scene and often exhibit lower coherence,
-particularly on rough surfaces.
+\subsection{Ray-Traced Ambient Occlusion (RTAO)}
+To ground objects physically within the scene, Ray-Traced Ambient Occlusion (\textbf{RTAO.rgen}) replaces traditional SSAO. RTAO casts short, hemisphere-distributed cosine-weighted rays from the G-buffer surface normals to detect local geometric occlusion.
+Because it relies on true scene geometry via the Vulkan ray-tracing pipeline rather than depth-buffer approximations, RTAO eliminates the screen-space halo artifacts and off-screen occlusion failures inherent to rasterized SSAO.
 
-The reflected radiance returned by these rays is stored in a screen-space buffer and denoised using SVGF before being integrated into the lighting pass. Due to the high variance of reflection signals at low sample counts,
-reflections require stronger spatiotemporal reconstruction than shadows.
+\subsection{ Ray-Traced Reflections (RTR)}
+Ray-traced reflections are generated by emitting rays from visible surface points based on the camera view direction and the G-buffer surface normal (\textbf{RTR.rgen}, \textbf{RTR.rchit}, and \textbf{RTR.rmiss}).
+Unlike shadow or AO rays, reflection rays traverse significantly larger portions of the scene and inherently exhibit lower coherence, particularly when scattering across rough metallic surfaces.
 
-When ray-traced reflections are disabled, the renderer falls back to screen-space reflections. This allows direct comparison between screen-space and ray-traced reflections within the same deferred lighting framework.
+Because the reflected radiance returned by these rays is highly volatile at low sample counts, reflections require the most aggressive spatiotemporal reconstruction in the pipeline.
+
+\subsection{Dual-Path SVGF Reconstruction}
+To resolve the Monte Carlo noise produced by low-sample ray tracing, the engine utilizes a custom Spatiotemporal Variance-Guided Filtering (SVGF) implementation.
+This reconstruction pipeline is divided into dedicated temporal accumulation (\textbf{SVGFTemporalPass.cpp} and \textbf{svgf\_temporal.comp}) and spatial filtering passes (\textbf{SVGFSpatialPass.cpp} and \textbf{svgf\_spatial.comp}).
+Crucially, the engine architecture does not rigidly enforce a single denoising pipeline; instead, it dynamically supports both **Pre-Lighting** and **Post-Lighting** SVGF integrations to facilitate direct comparative analysis.
+
+\begin{itemize}
+    \item \textbf{Pre-Lighting Integration:} In this traditional configuration, the raw ray-traced shadow and reflection signals are denoised in isolation. The clean signals are then stored in secondary intermediate buffers before being integrated into the deferred lighting evaluation.
+    \item \textbf{Post-Lighting Integration:} In this experimental configuration, the spatial and temporal filters operate directly on the combined, fully lit signal, utilizing variance estimation to preserve high-frequency edges while aggressively blurring noise.
+\end{itemize}
+This modular, dual-path design allows the renderer to explicitly profile the structural overhead, Vulkan memory footprint, and overall performance differences between the two distinct SVGF integration strategies.
 
 \daechapter{Results}
-\daesection{Rasterization Baseline Performance}
-
-Table~\ref{tab:raster-baseline} summarizes GPU timings for the rasterization-only reference configuration, averaged over the middle 60 frames of a 120-frame capture window. Total GPU time remained stable (3--4~ms in the tested scene),
-indicating a steady-state workload after warm-up.
+\subsection{Rasterization Baseline Performance}
+\label{sec:raster-baseline}
+Table~\ref{tab:raster-baseline} summarizes the total GPU timings for the rasterization-only reference configuration.
+Total GPU time remained highly stable at approximately 1.35~ms in the tested scene, indicating a steady-state workload after the engine warm-up period.
 
 \begin{table}[H]
 \centering
-\caption{Rasterization-only baseline GPU timings (mean over middle 60 frames).}
-\label{tab:raster-baseline}
-\begin{tabular}{l r}
+\begin{tabular}{|l|c|}
 \hline
-\textbf{Pass} & \textbf{Mean (ms)} \\
+\textbf{Configuration} & \textbf{Total GPU Time (ms)} \\
 \hline
-Raster/Shadow Pass & 1.592 \\
-ScreenSpace/SSAO & 1.425 \\
-ScreenSpace/SSR & 0.042\\
-Raster/G-Buffer pass & 1.01 \\
-Depth pre-pass  & 0.044 \\
-Depth (unjittered) & 0.136\\
-Lighting/Deferred & 0.264 \\
-Post/TAA & 0.108 \\
-Post/Tonemap & 0.018 \\
-\textbf{Total GPU} & \textbf{3.65} \\
+Rasterization Baseline (1 SPP) & 1.35 \\
 \hline
 \end{tabular}
+\caption{Rasterization-only baseline total GPU timings (Sponza, $1920 \times 1080$)}
+\label{tab:raster-baseline}
 \end{table}
-Minor passes (exposure and sharpening) each contribute below 0.05~ms on average and are omitted for clarity.
 
-The baseline cost is dominated by rasterized shadow mapping and SSAO, which together account for the majority of frame time. All measurements in this table were collected in the Sponza test scene at 1920$\times$1080.
-This baseline serves as the reference point for evaluating the incremental overhead of ray-traced features in the following sections.
+As illustrated in the rasterization baseline performance distribution (\texttt{Raster\_Baseline\_Scatter.png}), traditional raster costs remain tightly clustered.
+The baseline cost is heavily dominated by traditional rasterized shadow mapping and SSAO. All measurements in this chapter were collected in the Sponza test scene at $1920 \times 1080$.
+This 1.35~ms baseline serves as the stable reference point for evaluating the incremental overhead of ray-traced features in the following sections.
 
 \subsection{Ray-Traced Shadow Performance}
-
+\label{sec:rt-shadows}
 This configuration replaces rasterized shadow mapping with ray-traced shadow queries while keeping all other pipeline stages identical to the rasterization baseline.
 Raster shadow passes are disabled, and a single ray-traced shadow pass followed by SVGF-based temporal filtering is enabled.
 
-Table~\ref{tab:rt-shadows} summarizes GPU timings averaged over the middle 60 frames of a 120-frame capture window.
-
 \begin{table}[H]
 \centering
-\caption{GPU timings with ray-traced shadows enabled (Sponza, 1920$\times$1080).}
-\label{tab:rt-shadows}
-\begin{tabular}{l r}
+\begin{tabular}{|l|c|c|}
 \hline
-\textbf{Pass} & \textbf{Mean (ms)} \\
+\textbf{Configuration} & \textbf{Total GPU Time (ms)} & \textbf{Overhead vs Baseline} \\
 \hline
-RT/Shadow Pass & 0.526 \\
-SVGF/Shadow Pass & 1.256 \\
-SVGF/Point Shadow Pass & 1.095 \\
-Raster/G-Buffer Pass & 1.01 \\
-ScreenSpace/SSAO & 1.43 \\
-Lighting/Deferred & 0.26 \\
-Post-processing & $<$0.20 \\
-\hline
-\textbf{Total GPU} & \textbf{4.14} \\
+RT Shadows (1 SPP + SVGF) & 1.88 & + 0.53~ms \\
+RT Shadows (8 SPP + SVGF) & 6.06 & + 4.71~ms \\
 \hline
 \end{tabular}
+\caption{Total GPU timings with ray-traced shadows enabled (SVGF Post-Lighting, Sponza, $1920 \times 1080$)}
+\label{tab:rt-shadows}
 \end{table}
 
-Compared to the rasterization baseline (3.65~ms), ray-traced shadows introduce an additional overhead of approximately 0.5~ms per frame.
-While the ray traversal cost is moderate, the majority of the overhead is attributed to SVGF-based spatiotemporal denoising, which is required to stabilize the low-sample shadow signal.
-Despite the increased cost, ray-traced shadows provide improved contact hardening and eliminate common shadow map artifacts such as aliasing and light leaking.
+Compared to the rasterization baseline (1.35~ms), 1~SPP ray-traced shadows introduce an additional overhead of approximately 0.53~ms per frame.
+The isolated performance scaling of this effect is mapped in \texttt{Shadows\_Scatter.png}. 
+
+While the raw ray traversal cost is moderate, a granular analysis of individual GPU passes (e.g., \texttt{Pass\_Breakdown\_RT\_FULL\_8SPP.png}) confirms that a significant portion of the overhead is attributed to SVGF-based spatiotemporal denoising,
+which is required to stabilize the low-sample shadow signal. Despite the increased computational cost, ray-traced shadows provide physically accurate contact hardening and completely eliminate common shadow map artifacts such as aliasing and light leaking.
 
 \subsection{Ray-Traced Reflection Performance}
-Ray-traced reflections replace screen-space reflections while preserving the same deferred lighting and material evaluation pipeline.
-Reflection rays are generated using G-buffer surface data and denoised using SVGF.
+\label{sec:rt-reflections}
+Ray-traced reflections replace screen-space reflections (SSR) while preserving the same deferred lighting and material evaluation pipeline. Reflection rays are generated using G-buffer surface data and denoised using SVGF.
 
-Table~\ref{tab:rt-reflections} reports GPU timings for different reflection sample counts.
 \begin{table}[H]
 \centering
-\caption{GPU timings for ray-traced reflections at varying sample counts (Sponza, 1920$\times$1080).}
-\label{tab:rt-reflections}
-\begin{tabular}{l r r r}
+\begin{tabular}{|l|c|c|}
 \hline
-\textbf{Pass} & \textbf{1 SPP} & \textbf{4 SPP} & \textbf{8 SPP} \\
+\textbf{Configuration} & \textbf{Total GPU Time (ms)} & \textbf{Overhead vs Baseline} \\
 \hline
-RT/Reflections Pass & 0.554 & 1.262 & 1.724 \\
-SVGF/Reflection Pass & 1.31 & 1.146 & 1.11 \\
-ScreenSpace/SSR (baseline) & 0.04 & -- & -- \\
-\hline
-\textbf{Total GPU} & 4.14 & 4.24 & 4.47 \\
+RT Reflections (1 SPP + SVGF) & 2.05 & + 0.70~ms \\
+RT Reflections (8 SPP + SVGF) & 3.84 & + 2.49~ms \\
+RT Reflections (16 SPP + SVGF) & 5.81 & + 4.46~ms \\
 \hline
 \end{tabular}
+\caption{Total GPU timings for ray-traced reflections at varying sample counts (SVGF Post-Lighting, Sponza, $1920 \times 1080$)}
+\label{tab:rt-reflections}
 \end{table}
-Compared to the raster baseline, which uses screen-space reflections at a cost of approximately 0.04~ms, ray-traced reflections introduce a substantial but controllable overhead depending on sample count.
-Reflection cost scales sub-linearly with sample count due to amortization through spatiotemporal denoising.
-While higher sample counts reduce temporal instability and noise, the marginal quality improvement beyond 4 SPP diminishes relative to the added cost.
-These results indicate that a 1 SPP configuration combined with temporal accumulation provides the most favorable balance between performance and visual quality.
+
+Compared to the raster baseline---which utilizes rudimentary screen-space reflections at a negligible cost---1~SPP ray-traced reflections introduce a controllable overhead of 0.70~ms.
+As visualized in the individual effect breakdown (\texttt{Reflections\_RTR\_Scatter.png}), reflection cost scales sub-linearly with sample count due to the fixed-cost amortization of spatiotemporal denoising. 
+
+While higher sample counts reduce initial noise, the marginal visual quality improvement diminishes rapidly relative to the added GPU cost.
+These results indicate that a 1~SPP configuration combined with aggressive temporal accumulation provides the most favorable balance between real-time performance and perceptual visual quality.
+
 \subsection{Hybrid Configuration Comparison}
-To evaluate the effectiveness of different hybrid rendering configurations, the rasterization baseline is compared against ray-traced shadow and reflection variants under identical scene and resolution settings.
+\label{sec:hybrid-comparison}
+To evaluate the effectiveness of different hybrid rendering configurations, the full rasterization baseline is compared against the full combined ray-traced pipeline (Shadows, Reflections, and RTAO active simultaneously).
 Table~\ref{tab:hybrid-comparison} summarizes total GPU frame time and incremental cost relative to the raster-only baseline.
 
 \begin{table}[H]
 \centering
-\caption{Comparison of hybrid rendering configurations (Sponza, 1920$\times$1080).}
-\label{tab:hybrid-comparison}
-\begin{tabular}{l r r}
+\begin{tabular}{|l|c|c|}
 \hline
-\textbf{Configuration} & \textbf{Total GPU (ms)} & \textbf{Overhead vs Baseline (ms)} \\
+\textbf{Configuration} & \textbf{Total GPU (ms)} & \textbf{Overhead vs Baseline} \\
 \hline
-Rasterization Only & 3.65 & -- \\
-RT Shadows (1 SPP + SVGF) & 4.14 & +0.49 \\
-RT Reflections (1 SPP + SVGF) & 4.14 & +0.49 \\
-RT Reflections (4 SPP + SVGF) & 4.24 & +0.59 \\
-RT Reflections (8 SPP + SVGF) & 4.47 & +0.82 \\
+Rasterization Only & 1.35 & -- \\
+RT Full Pipeline (1 SPP + SVGF) & 2.24 & + 0.89~ms \\
+RT Full Pipeline (8 SPP + SVGF) & 8.80 & + 7.45~ms \\
+RT Full Pipeline (16 SPP + SVGF) & 10.01 & + 8.66~ms \\
+RT Full Pipeline (32 SPP + SVGF) & 20.06 & + 18.71~ms \\
 \hline
 \end{tabular}
+\caption{Comparison of hybrid rendering configurations (SVGF Post-Lighting Full Pipeline, Sponza, $1920 \times 1080$)}
+\label{tab:hybrid-comparison}
 \end{table}
-All configurations were measured using identical scenes, resolution, and capture methodology; only the enabled ray tracing features differ between configurations.
 
-The results show that hybrid ray tracing can be integrated at a modest and predictable performance cost when combined with G-buffer–guided ray generation and spatiotemporal denoising.
-Both ray-traced shadows and 1~SPP ray-traced reflections increase frame time by approximately 0.5~ms relative to the rasterization baseline, representing an overhead of roughly 13--15\%.
+All configurations were measured using identical scenes, resolution, and capture methodology.
+This overarching performance-versus-quality trade-off is visually captured in the full pipeline scatter plot (\texttt{Thesis\_FullPipeline\_Scatter.png}) and explicitly detailed in the convergence curve (\texttt{SPP\_Scaling\_Convergence\_Chart.png}).
+The quantitative data shows that a complete hybrid ray-tracing pipeline can be integrated at a highly efficient 2.24~ms per frame when restricted to 1~SPP. This represents a total pipeline overhead of roughly +0.89~ms over traditional rasterization while providing drastically superior lighting, shadows, and reflections.
 
-Increasing reflection sample count beyond 1~SPP yields diminishing returns.
-While 4~SPP and 8~SPP configurations reduce temporal noise, the additional cost grows faster than the perceptual improvement, particularly after SVGF reconstruction.
-This behavior confirms that temporal accumulation is the dominant factor in stabilizing low-sample ray-traced signals.
+The SPP convergence charts demonstrate a steep law of diminishing returns when pushing sample counts to 8~SPP, 16~SPP, and beyond. While an 8~SPP configuration lowers raw temporal variance before denoising,
+the total GPU time spikes to 8.80~ms. The additional traversal cost grows significantly faster than the perceptual LPIPS improvement after SVGF reconstruction.
+This suggests that, at least within the tested scene, temporal accumulation is the primary factor stabilizing low-sample ray-traced signals, with additional per-frame samples contributing comparatively little beyond that point.
 
-Overall, the configuration combining G-buffer–guided ray tracing at 1~SPP with spatiotemporal denoising provides the most favorable balance between visual quality and performance.
+\subsection{G-buffer-Guided vs. Unguided Ray Dispatching}
+\label{sec:guided-vs-unguided}
+To validate the architectural decision of utilizing the G-buffer to guide ray generation, a direct performance comparison was conducted between the standard G-buffer-guided pipeline and the unguided fallback variants.
+In the unguided configuration, rays are dispatched blindly into the scene without prior rasterized visibility culling or normal/roughness data pre-caching. 
 
-These findings validate the hybrid strategy ranking proposed earlier.
-Selective ray tracing guided by rasterized visibility, combined with low sample counts and temporal denoising, consistently outperforms both pure screen-space techniques and higher-sample ray-traced variants in terms of quality-per-millisecond.
-\begin{figure}[H]
-    \centering
-    \subfloat[\centering \textbf{Our Implementation} (Vulkan Hybrid)]{
-        \includegraphics[width=0.46\textwidth]{images/Sponza_CustomRender.png}
-        \label{fig:sponza-custom}
-    }
-    \hfill
-    \subfloat[\centering \textbf{Reference} (Unreal Engine 5)]{
-        \includegraphics[width=0.46\textwidth]{images/UE5_Sponza.png}
-        \label{fig:sponza-ue5}
-    }
-    \caption{Visual validation of the hybrid renderer. Our Vulkan implementation (a) achieves lighting and shadow parity comparable to the commercial reference (b) while maintaining real-time frame rates.}
-    \label{fig:comparison}
-\end{figure}
-\subsection{Reflection Stress Test: Metal Spheres Scene}
-The metal spheres scene was used as a reflection stress test due to its high proportion of smooth, metallic surfaces.
-This configuration increases the perceptual visibility of reflection noise and makes reconstruction quality more critical.
-
-Table~\ref{tab:metal-reflections} reports measured GPU timings for ray-traced reflections under the same capture methodology
-(120 frames recorded, middle 60 averaged) at 1920$\times$1080.
+Table~\ref{tab:guided-vs-unguided} isolates the total GPU timings for both individual reflections (RTR) and the Full Ray-Traced Pipeline under the \texttt{SVGF\_PRE\_LIGHTING} architecture at 1~SPP and 8~SPP.
 
 \begin{table}[H]
 \centering
-\caption{Ray-traced reflection performance in the metal spheres test scene (1920$\times$1080).}
-\label{tab:metal-reflections}
-\begin{tabular}{l r r r}
+\begin{tabular}{|l|c|c|c|}
 \hline
-\textbf{Pass / Metric} & \textbf{1 SPP} & \textbf{4 SPP} & \textbf{8 SPP} \\
+\textbf{Configuration} & \textbf{Guided (G-buffer)} & \textbf{Unguided} & \textbf{Performance Penalty} \\
 \hline
-RT/Reflections Pass & 0.290 & 0.322 & 0.510 \\
-SVGF/Reflection Pass & 1.481 & 1.481 & 1.502 \\
-\hline
-\textbf{Total GPU} & \textbf{4.144} & \textbf{4.241} & \textbf{4.472} \\
+RT Reflections (1 SPP) & 2.18~ms & 2.83~ms & + 0.65~ms \\
+RT Reflections (8 SPP) & 3.00~ms & 4.64~ms & + 1.64~ms \\
+RT Full Pipeline (1 SPP) & 4.52~ms & 7.75~ms & + 3.23~ms \\
+RT Full Pipeline (8 SPP) & 7.66~ms & 21.26~ms & + 13.60~ms \\
 \hline
 \end{tabular}
+\caption{Total GPU timings comparing Guided vs. Unguided ray generation (Sponza, $1920 \times 1080$)}
+\label{tab:guided-vs-unguided}
+\end{table}
+As the data explicitly demonstrates, relying on the G-buffer for primary visibility and ray origin calculation dramatically reduces the Bounding Volume Hierarchy (BVH) traversal overhead.
+At a budget of 1~SPP, blindly dispatching unguided rays for the full pipeline nearly doubles the rendering cost (from 4.52~ms up to 7.75~ms).
+The architectural flaw of unguided dispatching becomes catastrophic at higher sample counts; pushing the full unguided pipeline to 8~SPP results in a massive 21.26~ms frame time,
+rendering it entirely unviable for real-time applications (running nearly three times slower than its guided counterpart at 7.66~ms). By providing accurate surface normals and spatial bounds upfront,
+the G-buffer-guided approach severely restricts the volume of the scene the ray tracing cores must evaluate.
+
+\vspace{1em}
+\noindent\textbf{Conclusion:}\\
+Within the tested scene, the configuration combining G-buffer-guided ray tracing at 1~SPP with spatiotemporal denoising offers the strongest measured balance between GPU cost and image quality.
+These benchmark results support the hybrid rendering strategy proposed earlier: selective ray tracing guided by rasterized visibility, combined with a 1~SPP budget and temporal denoising,
+outperformed both pure screen-space techniques and higher-sample ray tracing in terms of perceptual quality relative to GPU cost, under the conditions tested here.
+
+\subsection{Visual Quality and Perceptual Metrics}
+\label{sec:visual-quality}
+To objectively quantify the visual fidelity of the hybrid pipeline, rendering outputs were evaluated against a high-sample ground truth using three standard metrics: Peak Signal-to-Noise Ratio (PSNR),
+Structural Similarity Index Measure (SSIM), and Learned Perceptual Image Patch Similarity (LPIPS). While PSNR and SSIM measure strict mathematical pixel-level differences,
+LPIPS utilizes deep learning networks to evaluate how humans perceive structural noise and blurring. For PSNR and SSIM, higher values are better. For LPIPS, lower values indicate less perceptual error.
+
+\subsubsection{The Convergence of Raw Ray Tracing}
+\label{sec:raw-rt}
+To establish a baseline for how ray sampling scales without interference, the Full Ray-Traced Pipeline was first evaluated completely raw, without any SVGF spatial or temporal filtering applied.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Configuration (No Denoiser)} & \textbf{LPIPS ($\downarrow$)} & \textbf{PSNR ($\uparrow$)} & \textbf{SSIM ($\uparrow$)} \\
+\hline
+RT Full Pipeline (1 SPP) & 0.5195 & 17.138 & 0.5560 \\
+RT Full Pipeline (8 SPP) & 0.1283 & 21.146 & 0.7888 \\
+RT Full Pipeline (16 SPP) & 0.1031 & 21.447 & 0.8232 \\
+RT Full Pipeline (32 SPP) & 0.0753 & 21.614 & 0.8557 \\
+\hline
+\end{tabular}
+\caption{Quality Metrics for Raw Ray Tracing (No Denoiser) (Sponza, $1920 \times 1080$)}
+\label{tab:raw-metrics}
 \end{table}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.85\textwidth]{images/Metal-Sphere_Custom.png}
-    \caption{The "Metal Spheres" stress test scene. Unlike the diffuse Sponza scene, this environment features highly coherent loss and multi-bounce specular interactions, stressing the SVGF denoiser.}
-    \label{fig:metal-stress}
-\end{figure}
+As expected, raw Monte Carlo rendering exhibits standard mathematical convergence. At 1~SPP, the image is overwhelmed by high-frequency variance,
+resulting in a poor LPIPS score of 0.5195. As the ray budget increases to 8~SPP, the variance plummets, drastically improving the LPIPS score to 0.1283. Pushing the engine to 32~SPP yields a near-pristine image with an LPIPS of 0.0753 and an SSIM of 0.8557.
+However, as established in Section~\ref{sec:hybrid-comparison}, achieving this raw quality requires an unviable 20+~ms per frame.
 
-In this scene, the reflection traversal cost increases with sample count, while the SVGF reconstruction cost remains approximately constant.
-As a result, overall frame time increases modestly from 1~SPP to 8~SPP, confirming that spatiotemporal denoising is the dominant fixed cost in low-sample reflection configurations.
-These results support the conclusion that 1~SPP provides the best performance tradeoff in reflection-heavy scenarios, with higher sample counts offering diminishing returns relative to their additional cost.
-\newpage
+\subsubsection{The Denoising Plateau (SVGF)}
+\label{sec:denoising-plateau}
+When the Post-Lighting SVGF pipeline is engaged, the scaling behavior of the perceptual metrics changes fundamentally.
 
-\daechapter{Discussion}
-Although perceptual metrics are discussed in the methodology, the optimization analysis in this section focuses on practical quality-per-cost tradeoffs derived from measured GPU timings and observed visual stability.
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Configuration (SVGF Enabled)} & \textbf{LPIPS ($\downarrow$)} & \textbf{PSNR ($\uparrow$)} & \textbf{SSIM ($\uparrow$)} \\
+\hline
+RT Full Pipeline (1 SPP) & 0.3632 & 10.495 & 0.4040 \\
+RT Full Pipeline (8 SPP) & 0.3716 & 10.237 & 0.3843 \\
+RT Full Pipeline (16 SPP) & 0.3693 & 10.218 & 0.3830 \\
+RT Full Pipeline (32 SPP) & 0.3704 & 10.213 & 0.3839 \\
+\hline
+\end{tabular}
+\caption{Quality Metrics with Post-Lighting SVGF Enabled (Sponza, $1920 \times 1080$)}
+\label{tab:svgf-metrics}
+\end{table}
 
-The results indicate that \textbf{spatiotemporal denoising dominates perceived quality at low sample counts}.
-For both ray-traced shadows and reflections, increasing sample count primarily reduces noise in the raw signal, while the denoiser is responsible for the majority of visual convergence.
-As a result, the marginal visual benefit of increasing sample count beyond 1~SPP diminishes rapidly under real-time frame budgets.
+Comparing the 1~SPP configurations, the SVGF filter successfully rescues the noisy raw signal, improving the LPIPS error from 0.5195 down to 0.3632,
+producing a perceptually stable, interactive image. However, Table~\ref{tab:svgf-metrics} reveals a critical architectural bottleneck: the quality metrics completely plateau beyond 1~SPP. When the ray budget is increased to 8, 16, or even 32~SPP,
+the LPIPS score stagnates at approximately 0.37, while PSNR and SSIM show no mathematical improvement.
 
-A key observation is that \textbf{enabling a ray-traced feature at 1~SPP consistently provides greater perceived improvement than allocating the same budget to increasing sample count}.
-This is especially evident for reflections, where SVGF reconstruction stabilizes the signal effectively at 1~SPP, and higher sample counts yield progressively smaller gains relative to their cost.
+\subsubsection{Note on Metric Interpretation}
+\label{sec:metric-interpretation}
+It should be noted that the absolute PSNR and SSIM values reported in Table~\ref{tab:svgf-metrics} are affected by a known limitation in the current albedo demodulation implementation.
+The Post-Lighting SVGF pipeline demodulates the diffuse albedo prior to filtering---separating irradiance from surface reflectance so that spatial and temporal filtering operates on a smoother,
+lower-frequency signal---and re-multiplies the albedo back in after denoising. 
 
-These findings suggest that quality optimization in hybrid pipelines should prioritize \emph{feature coverage} over \emph{sample density}.
-Selective ray tracing combined with aggressive temporal reconstruction offers the most efficient use of limited ray budgets, while higher sample counts are best reserved for offline rendering or non–real-time scenarios.
+In the current implementation, this remodulation step does not fully preserve the original image brightness, resulting in a systematic darkening of the final output relative to the ground truth reference.
+This explains why LPIPS, which evaluates perceptual and structural similarity via deep feature comparison, remains relatively stable and low across sample counts,
+while PSNR and SSIM---both of which are highly sensitive to absolute pixel-level intensity differences---report a large error even at the point of visual convergence. 
 
-\textbf{Limitations:}
+The relative trends observed across sample counts (i.e., the plateau beyond 1~SPP) therefore remain valid, since the darkening bias is constant across all configurations in Table~\ref{tab:svgf-metrics}. However, the absolute PSNR/SSIM values in this table should not be directly compared against the raw, undenoised results in Table~\ref{tab:raw-metrics}, nor interpreted as representative of SVGF's theoretical quality ceiling. A corrected remodulation step---likely involving a review of the albedo epsilon clamping and the linear/sRGB colorspace consistency between the demodulation and remodulation stages---is identified as a direct avenue for future work.
+
+\subsection{Chapter Summary}
+These results indicate that the SVGF spatiotemporal filter, rather than the ray sample budget, is the dominant factor governing final image quality in the hybrid pipeline.
+The LPIPS scores in Table~\ref{tab:svgf-metrics} remain essentially flat across 1, 8, 16, and 32~SPP, in contrast to the clear monotonic convergence observed in the undenoised results of Table~\ref{tab:raw-metrics}.
+Since LPIPS is comparatively robust to the global brightness bias introduced by the current albedo remodulation implementation (see above),
+this plateau is interpreted as a genuine property of the \`a-trous filtering stage: once temporal accumulation and spatial filtering have stabilized the signal, additional ray samples provide diminishing returns in perceptual terms,
+while GPU cost continues to scale sharply (up to 20.06~ms at 32~SPP, as shown in Table~\ref{tab:hybrid-comparison}).
+
+The absolute PSNR and SSIM values in Table~\ref{tab:svgf-metrics} are not used to support this conclusion, as they are confounded by the remodulation-induced darkening discussed above.
+A precise characterization of the filter's intrinsic blurring---independent of the current brightness bias---is left as future work once the remodulation step is corrected.
+
+Taken together, these findings support 1~SPP as the most defensible sampling budget for the current implementation: it captures the large majority of the perceptual quality improvement SVGF is capable of providing at a fraction of the GPU cost of higher sample counts, and the available evidence does not show that additional samples meaningfully change that trade-off.
+\daechapter{Discussion and Limitations}
+
+\section{Practical Quality-per-Cost Tradeoffs}
+Although perceptual metrics quantify visual error against a high-sample baseline, the practical optimization of a hybrid rendering engine relies on balancing visual stability against strict frame-time budgets.
+The experimental results demonstrate that spatiotemporal denoising (SVGF) is the primary driver of perceived image quality at low sample counts.
+
+For ray-traced shadows, reflections, and ambient occlusion, increasing the sampling rate beyond 1~SPP (to 8, 16, or 32~SPP) primarily serves to reduce Monte Carlo variance in the raw, pre-filtered signal.
+However, it is the spatiotemporal filter that executes the vast majority of the visual convergence across frames. Consequently, under interactive frame budgets,
+the marginal visual improvement obtained by increasing the sample count to 8~SPP or beyond diminishes rapidly.
+The spatial and temporal stability gained by brute-forcing 8 to 32 samples per pixel fundamentally fails to justify the exponential rise in raw ray traversal overhead.
+
+\section{Feature Coverage versus Sample Density}
+A central finding of this evaluation is that enabling additional ray-traced effects at 1~SPP provides a drastically greater perceptual upgrade than spending that same millisecond budget on increasing the sample density of a single existing effect.
+
+As demonstrated in the results, the unified Post-Lighting architecture is capable of running the entire hybrid pipeline (shadows, reflections, and ambient occlusion concurrently) at a highly efficient 2.24~ms when restricted to 1~SPP.
+Conversely, pushing that exact same pipeline to 8~SPP skyrockets the total GPU cost to 8.80~ms, while yielding negligible visual gains post-reconstruction.
+
+These results dictate a clear design guideline for real-time engine architecture: hybrid pipelines should prioritize feature coverage over sample density.
+Allocating computational budgets toward selective 1~SPP dispatches across multiple features maximizes the visual value returned per millisecond.
+Higher sample counts remain mathematically and computationally inefficient for real-time rendering and are strictly better suited for non-real-time or offline rendering scenarios.
+
+\section{Methodological Limitations}
+While these findings offer clear architectural guidance for hybrid engines, certain limitations of this study must be acknowledged:
+
 \begin{itemize}
-    \item Limited to two test scenes; may not capture all scene types.
-    \item Results may not generalize to future GPU architectures.
+    \item \textbf{Scene Complexity and Diversity:} The evaluation was conducted using the Sponza environment. While this scene rigorously tests complex shadow occlusion, soft penumbras, and indirect lighting bounces in a highly detailed geometric space, it is fundamentally a static indoor environment. It does not fully capture the Bounding Volume Hierarchy (BVH) rebuild costs, dynamic object updates, or specialized traversal bottlenecks associated with massive, foliage-heavy open-world scenes.
+    
+    \item \textbf{Hardware Sensitivity:} Timings were gathered on a fixed upper-midrange to enthusiast-tier GPU baseline (AMD Radeon RX 9070 XT). While the relative scaling trends (e.g., sub-linear traversal cost versus constant SVGF overhead) and the architectural advantages of Post-Lighting integration remain objectively valid across hardware targets, absolute millisecond costs and RT-core scaling will vary across different GPU microarchitectures and vendor-specific traversal pipelines.
 \end{itemize}
-
 
 % -----------------------------------------------------------
 % CONCLUSION
 % -----------------------------------------------------------
 \daechapter{Conclusion}
-This study confirmed that hybrid ray tracing can be achieved with only a 13--15\% performance overhead (0.49ms) on mid-range hardware.
-Our results demonstrate that 1 SPP with SVGF denoising is the optimal strategy, as increasing reflection sample count to 4~SPP and 8~SPP further increased cost,
-while providing diminishing visible stability improvements under spatiotemporal reconstruction.
-Overall, the results support using G-buffer--guided ray tracing at low sample counts combined with spatiotemporal denoising as the most practical quality--performance tradeoff for real-time applications.
+
+This research set out to evaluate the performance overhead, perceptual trade-offs, and architectural efficiency of integrating hardware-accelerated ray tracing into a deferred rasterization pipeline.
+By meticulously profiling GPU timings, evaluating spatiotemporal reconstruction, and proposing a unified filtering architecture, this work establishes clear operational boundaries for budgeting ray-traced shadows, reflections,
+and ambient occlusion under real-time constraints.
+
+\section{Summary of Key Findings}
+
+\begin{itemize}
+    \item \textbf{Architectural Efficiency of Post-Lighting SVGF:} The proposed Post-Lighting SVGF architecture successfully eliminates the need for secondary G-buffer storage passes. By filtering the fully lit signal,
+     it drastically reduces pipeline complexity and structural overhead compared to traditional pre-lighting integration methods.
+    
+    \item \textbf{Low Overhead Integration:} Hybrid ray tracing can be integrated into a Vulkan deferred rasterizer with remarkable efficiency.
+     The experimental data proves that a complete hybrid pipeline---simultaneously running ray-traced shadows, reflections, and ambient occlusion at 1~SPP---can be achieved for a total frame-time of just 2.24~ms.
+      This represents an incremental overhead of only +0.89~ms over the traditional rasterization baseline (1.35~ms) on modern enthusiast-tier hardware.
+    
+    \item \textbf{Dominance of Reconstruction:} Spatiotemporal filtering (SVGF) acts as the fundamental backbone of low-sample hybrid rendering.
+     Because spatial and temporal accumulation aggressively eliminates high-frequency noise without requiring additional ray queries, a 1~SPP + SVGF configuration consistently yields the absolute optimal perceptual quality-per-millisecond ratio.
+    
+    \item \textbf{Diminishing Returns of Ray Density:} Increasing ray sampling density from 1~SPP to 8, 16, or 32~SPP introduces a severe performance penalty.
+     For example, pushing the full pipeline from 1~SPP to 8~SPP spikes the GPU cost from 2.24~ms to 8.80~ms, while offering negligible visual stability improvements post-denoising.
+\end{itemize}
+
+\section{Final Remarks}
+
+Ultimately, this work confirms that naive, full-resolution ray tracing remains fundamentally unnecessary for achieving modern real-time visual fidelity.
+Combining traditional rasterization for primary visibility with G-buffer-guided, selective ray dispatches restricted to a strict 1~SPP budget---backed by a robust,
+unified Post-Lighting spatiotemporal reconstruction architecture---represents the most computationally efficient, scalable, and practical strategy for real-time interactive applications today.
 
 \daechapter{Future Work}
 The research presented in this thesis focused on the incremental cost of hard-surface reflections and direct shadowing. While these provide the most immediate visual upgrade for hybrid pipelines,
@@ -1158,42 +1136,50 @@ perfectly smooth surfaces might require only 1 SPP, while rougher dielectrics co
 lower the total frame time further by allocating the ray budget only where strictly necessary.
 
 \daesection{Cross-Vendor Hardware Analysis}
-Finally, all performance data in this thesis was derived from NVIDIA RTX hardware. Given the architectural differences in how AMD (RDNA) and Intel (Arc) handle ray traversal, the "13--15\% overhead"
-figure found here may not generalize linearly. Repeating these timestamp measurements on alternative GPU architectures would help establish a more universal
-"cost of hybrid ray tracing" for cross-platform developers.
+
+All performance metrics and timestamp queries in this thesis were collected on an AMD Radeon (RDNA) architecture.
+Because hardware vendors employ fundamentally different microarchitectural approaches to ray tracing—such as AMD's Ray Accelerators embedded within Compute Units compared to NVIDIA's dedicated RT Cores or Intel's Ray Tracing Units (RTUs)—traversal throughput,
+bounding box intersection efficiency, and cache behavior vary significantly across platforms. 
+
+Consequently, the specific millisecond overheads and scaling factors measured in this study may not generalize linearly to NVIDIA RTX or Intel Arc hardware.
+Repeating these isolated pass breakdowns across alternative GPU architectures represents an important avenue of future research to establish an empirical, hardware-agnostic baseline for the cost of hybrid ray tracing.
+
 \daechapter{Critical Reflection}
-\daesection{Technical Challenges in Vulkan Integration}
-The transition from theoretical understanding of ray tracing to a practical Vulkan implementation proved to be the most significant challenge of this graduation work.
-Unlike higher-level APIs, Vulkan demands explicit management of synchronization. As noted in Mastering Graphics Programming with Vulkan, the responsibility for hazard tracking is shifted entirely to the developer,
-making the correct implementation of \texttt{VkImageMemoryBarrier} and pipeline stages a primary source of complexity in modern engine development \cite{castorina2023}.
 
-In the early stages of implementing the G-buffer-guided path, I frequently encountered synchronization validation errors and "black screen" bugs where resources were being read before write operations had completed.
-Debugging these race conditions required a shift in mindset—from thinking about rendering as a linear sequence of draw calls to thinking about it as a graph of dependencies.
-Mastering the usage of \texttt{VkImageMemoryBarrier} to safely transition the G-buffer from the rasterization pass to the ray generation shader was a pivotal learning moment.
-It highlighted that in hybrid rendering, the complexity lies not in the ray traversal itself, but in the safe and efficient sharing of data between the raster and compute pipelines.
+\section{Technical Challenges in Vulkan Integration}
+The transition from a theoretical understanding of ray tracing to a practical Vulkan implementation proved to be the most significant challenge of this graduation work. Unlike higher-level graphics APIs,
+Vulkan demands explicit and unforgiving management of synchronization. As noted in \emph{Mastering Graphics Programming with Vulkan}, the responsibility for hazard tracking is shifted entirely to the developer,
+making the correct implementation of \texttt{VkImageMemoryBarrier} and pipeline stages a primary source of complexity in modern engine development~\cite{castorina2023}.
 
-Shifting to ray tracing was another beast. Setting up Shader Binding Tables (SBTs) and BVH construction proved more difficult than I first thought.
-The project itself is not even close to finished; while the scenes tested here work and are stable,
-moving towards larger scenes like Amazon Bistro resulted in frequent GPU crashes, highlighting the fragility of research-grade implementations compared to production engines.
+In the early stages of implementing the G-buffer-guided path, I frequently encountered synchronization validation errors and ``black screen'' race conditions where resources were being read before write operations had completed.
+Debugging these issues required a fundamental shift in mindset---from viewing rendering as a linear sequence of draw calls to understanding it as an asynchronous graph of dependencies. 
 
-\daesection{The Reality of Real-Time Ray Tracing}
-Another critical realization was the discrepancy between raw ray tracing performance and perceived image quality.
-Initially, I underestimated the importance of denoising. My early implementations of 1~SPP reflections produced technically correct but visually unusable noise. 
+This steep learning curve is ultimately what made the implementation of the modular render graph architecture so invaluable.
+By abstracting the explicit management of memory barriers and layout transitions into a data-driven graph,
+I could automatically and safely hand off the G-buffer from the rasterization pass to the ray generation shaders without brittle manual hazard tracking.
+This pivotal structural improvement highlighted that in hybrid rendering, the core complexity lies not strictly in the ray traversal itself, but in the safe, automated, and efficient sharing of data between the raster and compute pipelines.
 
-Integrating the SVGF pipeline demonstrated that for real-time applications,
-the "ray tracing" is often the easy part; the "reconstruction" is where the visual fidelity is actually earned.
-This project forced me to dive deeper into signal processing concepts—variance estimation, temporal accumulation,
-and wavelet filtering—which were not part of my initial scope but became essential to proving the hypothesis.
-Realizing that a $4$~ms reflection pass is actually $1$~ms of tracing and $3$~ms of filtering fundamentally changed how I approach performance budgeting.
+Integrating hardware-accelerated ray tracing introduced a distinct architectural challenge.
+Setting up Shader Binding Tables (SBTs) and managing Bounding Volume Hierarchy (BVH) construction proved significantly more difficult than initially anticipated.
+Furthermore, while the implementation is stable for the scope of the Sponza test scene evaluated in this thesis, scaling the architecture to massive, production-level environments like the Amazon Bistro scene resulted in frequent GPU memory crashes.
+This starkly highlighted the fragility of a solo, research-grade engine implementation compared to a battle-tested commercial production engine.
 
-\daesection{Methodological Growth}
-Finally, this project refined my approach to performance analysis. At the start, I relied on simple frame-rate counters, which proved insufficient for isolating specific costs.
-Implementing a robust GPU timestamping system allowed me to dissect the frame and see the true cost of individual passes. This granularity was essential for the results chapter;
-without it, I would not have been able to identify that increasing sample counts yields diminishing returns compared to the overhead of the denoiser.
+\section{The Reality of Real-Time Ray Tracing}
+Another critical realization was the massive discrepancy between raw ray-tracing performance and perceived image quality. Initially, I underestimated the absolute necessity of denoising.
+My early implementations of 1~SPP reflections produced mathematically correct but visually unusable Monte Carlo noise.
 
-\daesection{Conclusion}
-While the final implementation successfully validates the efficiency of G-buffer-guided tracing, the journey highlighted the immense engineering overhead required to ship hybrid features.
-The project successfully bridged the gap between academic ray tracing theory and the low-level engineering reality of Vulkan, providing a solid foundation for future work in engine programming.
+Integrating the SVGF pipeline demonstrated that for real-time applications, the actual ``ray tracing'' is often the easiest part of the pipeline; the ``reconstruction'' is where visual fidelity is truly earned.
+This project forced me to dive deep into signal processing concepts---variance estimation, temporal accumulation, and \`a-trous wavelet filtering---which were not part of my initial scope but became essential to proving my hypothesis.
+Realizing that a 2.0~ms reflection pass actually consists of merely 0.5~ms of ray traversal and 1.5~ms of intensive spatiotemporal filtering fundamentally changed how I approach rendering architecture and performance budgeting.
+
+\section{Methodological Growth}
+Finally, this project deeply refined my approach to performance analysis. At the onset, I relied on coarse frame-rate (FPS) counters, which proved entirely insufficient for isolating specific algorithmic costs.
+Implementing a robust GPU timestamping system allowed me to dissect the frame at a microsecond level and see the true, unhidden cost of individual compute passes. This granularity was the backbone of my results chapter; without it,
+I would not have been able to definitively prove that increasing ray sample counts yields diminishing returns compared to the fixed overhead of the denoiser.
+
+\section{Final Conclusion}
+While the final implementation successfully validates the efficiency of G-buffer-guided ray tracing and the Post-Lighting SVGF architecture, the journey highlighted the immense engineering overhead required to ship hybrid features.
+This graduation project successfully bridged the gap between academic ray-tracing theory and the harsh, low-level engineering reality of Vulkan, providing a formidable technical foundation for my future work in rendering and engine programming.
 
 \bibliographystyle{apalike} 
 \bibliography{references}
