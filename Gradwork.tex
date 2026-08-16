@@ -473,7 +473,7 @@ impractical under fixed frame-time budgets. Consequently, modern engines employ
 hybrid ray tracing pipelines in which rasterization determines primary
 visibility, while ray tracing is selectively applied to specific effects such
 as shadows and reflections.\cite{haines2019raytracinggems}
-\subsection{Vulkan raytracing VS DXR}%raytracing gems 1 chap3 and raytracing gems2 chap 16
+\subsection{Vulkan raytracing VS DXR}
 Both Vulkan Ray Tracing and DirectX Raytracing (DXR) expose hardware-accelerated ray tracing through a common conceptual model consisting of acceleration structures, programmable ray tracing shaders, and shader binding tables.
 As described in Ray Tracing Gems, both APIs ultimately target the same fixed-function traversal hardware on modern GPUs and differ primarily in their API design philosophy rather than their underlying execution model.\\
 
@@ -838,6 +838,7 @@ Crucially, the engine architecture does not rigidly enforce a single denoising p
 This modular, dual-path design allows the renderer to explicitly profile the structural overhead, Vulkan memory footprint, and overall performance differences between the two distinct SVGF integration strategies.
 
 \daechapter{Results}
+
 \subsection{Rasterization Baseline Performance}
 \label{sec:raster-baseline}
 Table~\ref{tab:raster-baseline} summarizes the total GPU timings for the rasterization-only reference configuration.
@@ -856,9 +857,16 @@ Rasterization Baseline (1 SPP) & 1.35 \\
 \label{tab:raster-baseline}
 \end{table}
 
-As illustrated in the rasterization baseline performance distribution (\texttt{Raster\_Baseline\_Scatter.png}), traditional raster costs remain tightly clustered.
+Traditional raster costs remain tightly clustered, as illustrated in the rasterization baseline performance distribution in Figure~\ref{fig:raster_baseline_scatter}.
 The baseline cost is heavily dominated by traditional rasterized shadow mapping and SSAO. All measurements in this chapter were collected in the Sponza test scene at $1920 \times 1080$.
 This 1.35~ms baseline serves as the stable reference point for evaluating the incremental overhead of ray-traced features in the following sections.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/Raster_Baseline_Scatter.png}
+\caption{Performance distribution and timing clustering for the rasterization baseline configuration.}
+\label{fig:raster_baseline_scatter}
+\end{figure}
 
 \subsection{Ray-Traced Shadow Performance}
 \label{sec:rt-shadows}
@@ -880,10 +888,24 @@ RT Shadows (8 SPP + SVGF) & 6.06 & + 4.71~ms \\
 \end{table}
 
 Compared to the rasterization baseline (1.35~ms), 1~SPP ray-traced shadows introduce an additional overhead of approximately 0.53~ms per frame.
-The isolated performance scaling of this effect is mapped in \texttt{Shadows\_Scatter.png}. 
+The isolated performance scaling of this effect is mapped in Figure~\ref{fig:shadows_scatter}. 
 
-While the raw ray traversal cost is moderate, a granular analysis of individual GPU passes (e.g., \texttt{Pass\_Breakdown\_RT\_FULL\_8SPP.png}) confirms that a significant portion of the overhead is attributed to SVGF-based spatiotemporal denoising,
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/Shadows_Scatter.png}
+\caption{Isolated performance scaling and timing distribution of ray-traced shadow passes.}
+\label{fig:shadows_scatter}
+\end{figure}
+
+While the raw ray traversal cost is moderate, a granular analysis of individual GPU passes (depicted in Figure~\ref{fig:pass_breakdown_8spp}) confirms that a significant portion of the overhead is attributed to SVGF-based spatiotemporal denoising,
 which is required to stabilize the low-sample shadow signal. Despite the increased computational cost, ray-traced shadows provide physically accurate contact hardening and completely eliminate common shadow map artifacts such as aliasing and light leaking.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/Pass_Breakdown_RT_FULL_8SPP.png}
+\caption{Granular pass-by-pass GPU timing breakdown for the full pipeline configuration at 8~SPP.}
+\label{fig:pass_breakdown_8spp}
+\end{figure}
 
 \subsection{Ray-Traced Reflection Performance}
 \label{sec:rt-reflections}
@@ -905,7 +927,14 @@ RT Reflections (16 SPP + SVGF) & 5.81 & + 4.46~ms \\
 \end{table}
 
 Compared to the raster baseline---which utilizes rudimentary screen-space reflections at a negligible cost---1~SPP ray-traced reflections introduce a controllable overhead of 0.70~ms.
-As visualized in the individual effect breakdown (\texttt{Reflections\_RTR\_Scatter.png}), reflection cost scales sub-linearly with sample count due to the fixed-cost amortization of spatiotemporal denoising. 
+As visualized in the individual effect breakdown in Figure~\ref{fig:reflections_scatter}, reflection cost scales sub-linearly with sample count due to the fixed-cost amortization of spatiotemporal denoising. 
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/Reflections_RTR_Scatter.png}
+\caption{Performance scaling behavior of ray-traced reflections across varying sample counts.}
+\label{fig:reflections_scatter}
+\end{figure}
 
 While higher sample counts reduce initial noise, the marginal visual quality improvement diminishes rapidly relative to the added GPU cost.
 These results indicate that a 1~SPP configuration combined with aggressive temporal accumulation provides the most favorable balance between real-time performance and perceptual visual quality.
@@ -933,7 +962,22 @@ RT Full Pipeline (32 SPP + SVGF) & 20.06 & + 18.71~ms \\
 \end{table}
 
 All configurations were measured using identical scenes, resolution, and capture methodology.
-This overarching performance-versus-quality trade-off is visually captured in the full pipeline scatter plot (\texttt{Thesis\_FullPipeline\_Scatter.png}) and explicitly detailed in the convergence curve (\texttt{SPP\_Scaling\_Convergence\_Chart.png}).
+This overarching performance-versus-quality trade-off is visually captured in the full pipeline scatter plot (Figure~\ref{fig:full_pipeline_scatter}) and explicitly detailed in the convergence curve (Figure~\ref{fig:spp_convergence}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/Thesis_FullPipeline_Scatter.png}
+\caption{Comprehensive performance-versus-quality trade-off across full pipeline configurations.}
+\label{fig:full_pipeline_scatter}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/SPP_Scaling_Convergence_Chart.png}
+\caption{Sample count (SPP) scaling convergence chart demonstrating diminishing perceptual returns.}
+\label{fig:spp_convergence}
+\end{figure}
+
 The quantitative data shows that a complete hybrid ray-tracing pipeline can be integrated at a highly efficient 2.24~ms per frame when restricted to 1~SPP. This represents a total pipeline overhead of roughly +0.89~ms over traditional rasterization while providing drastically superior lighting, shadows, and reflections.
 
 The SPP convergence charts demonstrate a steep law of diminishing returns when pushing sample counts to 8~SPP, 16~SPP, and beyond. While an 8~SPP configuration lowers raw temporal variance before denoising,
@@ -962,6 +1006,7 @@ RT Full Pipeline (8 SPP) & 7.66~ms & 21.26~ms & + 13.60~ms \\
 \caption{Total GPU timings comparing Guided vs. Unguided ray generation (Sponza, $1920 \times 1080$)}
 \label{tab:guided-vs-unguided}
 \end{table}
+
 As the data explicitly demonstrates, relying on the G-buffer for primary visibility and ray origin calculation dramatically reduces the Bounding Volume Hierarchy (BVH) traversal overhead.
 At a budget of 1~SPP, blindly dispatching unguided rays for the full pipeline nearly doubles the rendering cost (from 4.52~ms up to 7.75~ms).
 The architectural flaw of unguided dispatching becomes catastrophic at higher sample counts; pushing the full unguided pipeline to 8~SPP results in a massive 21.26~ms frame time,
